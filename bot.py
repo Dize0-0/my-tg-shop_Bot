@@ -519,9 +519,9 @@ def main_menu_kb(user_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton('💰 Пополнить', callback_data='menu:topup'),
         InlineKeyboardButton('📋 Правила', callback_data='menu:agreement'),
     )
-    kb.add(InlineKeyboardButton('📣 Канал', callback_data='menu:channel'))
+    kb.add(InlineKeyboardButton('⭐ Отзывы', callback_data='menu:reviews'))
     kb.add(
-        InlineKeyboardButton('⭐ Отзывы', callback_data='menu:reviews'),
+        InlineKeyboardButton('📣 Канал', callback_data='menu:channel'),
         InlineKeyboardButton('👤 Профиль', callback_data='menu:profile'),
     )
     if is_admin(user_id):
