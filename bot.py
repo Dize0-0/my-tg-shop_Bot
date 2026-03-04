@@ -514,17 +514,15 @@ def proxy_sections_kb() -> InlineKeyboardMarkup:
 
 def main_menu_kb(user_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton('🛒 Каталог', callback_data='menu:catalog'),
-        InlineKeyboardButton('👤 Профиль', callback_data='menu:profile'),
-    )
+    kb.add(InlineKeyboardButton('🛒 Каталог', callback_data='menu:catalog'))
     kb.add(
         InlineKeyboardButton('💰 Пополнить', callback_data='menu:topup'),
         InlineKeyboardButton('📋 Правила', callback_data='menu:agreement'),
     )
+    kb.add(InlineKeyboardButton('📣 Канал', callback_data='menu:channel'))
     kb.add(
         InlineKeyboardButton('⭐ Отзывы', callback_data='menu:reviews'),
-        InlineKeyboardButton('📣 Канал', callback_data='menu:channel'),
+        InlineKeyboardButton('👤 Профиль', callback_data='menu:profile'),
     )
     if is_admin(user_id):
         kb.add(InlineKeyboardButton('🛠 Админ панель', callback_data='menu:adminpanel'))
