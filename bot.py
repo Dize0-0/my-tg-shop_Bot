@@ -164,7 +164,7 @@ def env_bool_or_default(key: str, default: bool) -> bool:
         return default
     return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
 
-API_TOKEN = '8436518410:AAFF9AG58xsr1iWsidkD9yoDEqAKfgaAHkY'
+API_TOKEN = '8436518410:AAEjrIGo3tdFXhNGtyGqYXKCdCzIHzzLtnA'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ADMIN_IDS: Set[int] = set(
     int(value.strip())
