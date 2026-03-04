@@ -1,11 +1,19 @@
 import asyncio
+import atexit
+import base64
 import datetime
+import hashlib
 import html
+import json
 import logging
 import os
 import re
+import sys
 import threading
-from urllib.parse import urlencode
+from pathlib import Path
+from urllib.parse import quote, urlencode
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from typing import Any, Dict, Optional, Set
 
 from aiogram import Bot, Dispatcher, types
@@ -16,24 +24,31 @@ from aiogram.utils import executor
 from db import (
     activate_promo,
     add_product,
+    append_product_credentials_with_stock,
     apply_auto_restock,
     change_balance,
-    claim_daily_bonus,
     confirm_topup,
     create_order,
+    consume_product_credentials,
+    create_review,
     create_promo,
     create_topup,
+    delete_review,
     deactivate_product,
     get_balance,
-    get_daily_bonus_remaining_seconds,
     get_order,
     get_product,
     init_db,
+    get_reviews_stats,
+    list_admin_logs,
+    list_reviews,
+    list_reviews_page,
     list_products,
     list_pending_topups_for_auto,
     list_all_products_admin,
     list_user_orders,
     list_user_topups,
+    log_admin_action,
     seed_products,
     set_order_code,
     set_order_phone,
@@ -55,6 +70,40 @@ except Exception:
     FUNPAY_API_AVAILABLE = False
 
 logging.basicConfig(level=logging.INFO)
+
+# Bot instance lock file to prevent multiple simultaneous runs
+LOCK_FILE = Path(__file__).parent / 'bot.lock'
+
+
+def acquire_lock():
+    if LOCK_FILE.exists():
+        try:
+            with open(LOCK_FILE, 'r') as f:
+                old_pid = f.read().strip()
+            logging.warning(f'Lock file exists (PID: {old_pid}). Attempting cleanup...')
+            LOCK_FILE.unlink()
+        except Exception as e:
+            logging.error(f'Failed to remove stale lock: {e}')
+    
+    try:
+        with open(LOCK_FILE, 'w') as f:
+            f.write(str(os.getpid()))
+        logging.info(f'Lock acquired: PID {os.getpid()}')
+    except Exception as e:
+        logging.error(f'Failed to create lock file: {e}')
+        sys.exit(1)
+
+
+def release_lock():
+    try:
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+            logging.info('Lock released')
+    except Exception as e:
+        logging.error(f'Failed to release lock: {e}')
+
+
+atexit.register(release_lock)
 
 
 def load_local_env_file(file_path: str = '.env') -> None:
@@ -125,13 +174,16 @@ ADMIN_IDS: Set[int] = set(
 
 FUNPAY_PAYMENT_URL = env_or_default('FUNPAY_PAYMENT_URL', 'https://funpay.com/')
 FUNPAY_TOPUP_LOT_URL = env_or_default('FUNPAY_TOPUP_LOT_URL', '')
-FUNPAY_LOT_MAP = os.getenv('FUNPAY_LOT_MAP', '').strip()
+FUNPAY_LOT_MAP = os.getenv(
+    'FUNPAY_LOT_MAP',
+    '50=https://funpay.com/lots/offer?id=65219645;100=https://funpay.com/lots/offer?id=65219541',
+).strip()
+FUNPAY_LOT_URL_50 = env_or_default('FUNPAY_LOT_URL_50', 'https://funpay.com/lots/offer?id=65219645')
+FUNPAY_LOT_URL_100 = env_or_default('FUNPAY_LOT_URL_100', 'https://funpay.com/lots/offer?id=65219541')
 FUNPAY_GOLDEN_KEY = os.getenv('FUNPAY_GOLDEN_KEY', '').strip()
 FUNPAY_LISTEN_DELAY = env_int_or_default('FUNPAY_LISTEN_DELAY', 4)
 FUNPAY_MATCH_BY_AMOUNT = env_or_default('FUNPAY_MATCH_BY_AMOUNT', '1').lower() in {'1', 'true', 'yes', 'on'}
 PURCHASE_CASHBACK_PERCENT = env_float_or_default('PURCHASE_CASHBACK_PERCENT', 2.0)
-DAILY_BONUS_AMOUNT = env_float_or_default('DAILY_BONUS_AMOUNT', 5.0)
-DAILY_BONUS_COOLDOWN_HOURS = env_int_or_default('DAILY_BONUS_COOLDOWN_HOURS', 24)
 GITHUB_BACKUP_ENABLED = env_bool_or_default('GITHUB_BACKUP_ENABLED', False)
 GITHUB_BACKUP_INTERVAL_SECONDS = max(60, env_int_or_default('GITHUB_BACKUP_INTERVAL_SECONDS', 300))
 GITHUB_BACKUP_FILES = [
@@ -139,7 +191,11 @@ GITHUB_BACKUP_FILES = [
     for item in env_or_default('GITHUB_BACKUP_FILES', 'products.db').split(',')
     if item.strip()
 ]
-MAIN_MENU_PHOTO_URL = os.getenv('MAIN_MENU_PHOTO_URL', 'https://i.postimg.cc/4y127DrY/daa7dd69bf0ef2cf8efba080e603f2be.jpg')
+GITHUB_BACKUP_REPO = os.getenv('GITHUB_BACKUP_REPO', 'Dize0-0/my-tg-shop_Bot').strip()
+GITHUB_BACKUP_BRANCH = env_or_default('GITHUB_BACKUP_BRANCH', 'main')
+GITHUB_BACKUP_TOKEN = os.getenv('GITHUB_BACKUP_TOKEN', '').strip()
+GITHUB_BACKUP_REMOTE_DIR = env_or_default('GITHUB_BACKUP_REMOTE_DIR', 'backups')
+MAIN_MENU_PHOTO_URL = os.getenv('MAIN_MENU_PHOTO_URL', 'https://i.postimg.cc/qM2NwggQ/db0f16d54211312d8d0fe9e7b6aa95b7.jpg')
 CHANNEL_URL = os.getenv('CHANNEL_URL', 'https://t.me/H0MER0K')
 REVIEWS_URL = os.getenv('REVIEWS_URL', 'https://t.me/Lune_shop_bot_0')
 TG_CATEGORY_PHOTO_URL = os.getenv('TG_CATEGORY_PHOTO_URL', 'https://i.postimg.cc/QM32CZ4z/8BEC6871-6346-4FBE-AB56-1BE98473650D.png')
@@ -187,7 +243,16 @@ CATEGORY_NAMES = {
     'tg': '🤖 TG аккаунты',
     'email': '✉️ Почты',
 }
+CATALOG_VIEW_NAMES = {
+    'proxy': '🌐 Прокси',
+    'proxy_de': '🇩🇪 Прокси Германия',
+    'proxy_us': '🇺🇸 Прокси США',
+    'tg': '🤖 TG аккаунты',
+    'email': '✉️ Почты',
+}
 PRODUCTS_PAGE_SIZE = 5
+REVIEW_REWARD_RUB = 1.0
+REVIEWS_PAGE_SIZE = 3
 
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(bot)
@@ -199,6 +264,7 @@ pending_promo_input: Set[int] = set()
 pending_custom_topup: Set[int] = set()
 pending_tg_phone_order: Dict[int, int] = {}
 pending_custom_qty_input: Dict[int, Dict[str, int]] = {}
+pending_review_input: Dict[int, Dict[str, int]] = {}
 admin_add_product_state: Dict[int, Dict[str, str]] = {}
 admin_action_state: Dict[int, Dict[str, str]] = {}
 active_buy_users: Set[int] = set()
@@ -311,6 +377,11 @@ def create_funpay_payment(amount: float, user_id: int, topup_id: int) -> tuple[s
 def resolve_funpay_lot_url(amount: float) -> str:
     amount_key = f'{float(amount):.2f}'
 
+    if amount_key == '50.00' and FUNPAY_LOT_URL_50.startswith('http'):
+        return FUNPAY_LOT_URL_50
+    if amount_key == '100.00' and FUNPAY_LOT_URL_100.startswith('http'):
+        return FUNPAY_LOT_URL_100
+
     if FUNPAY_LOT_MAP:
         for part in FUNPAY_LOT_MAP.split(';'):
             item = part.strip()
@@ -330,25 +401,126 @@ def resolve_funpay_lot_url(amount: float) -> str:
     lot_url = FUNPAY_TOPUP_LOT_URL if FUNPAY_TOPUP_LOT_URL.startswith('http') else ''
     if lot_url:
         return lot_url
-
-    if FUNPAY_PAYMENT_URL.startswith('http'):
-        return FUNPAY_PAYMENT_URL
-    return 'https://funpay.com/'
+    return ''
 
 
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
+def build_main_menu_text(user_id: int, intro_text: str = '') -> str:
+    balance = get_balance(user_id)
+
+    proxy_items = get_catalog_products('proxy')
+    tg_items = get_catalog_products('tg')
+    email_items = get_catalog_products('email')
+    proxy_de_stock = get_catalog_stock_units('proxy_de')
+    proxy_us_stock = get_catalog_stock_units('proxy_us')
+    tg_stock = get_catalog_stock_units('tg')
+    email_stock = get_catalog_stock_units('email')
+    total_positions = len(proxy_items) + len(tg_items) + len(email_items)
+    total_stock = 0
+    for row in proxy_items + tg_items + email_items:
+        try:
+            total_stock += int(row[4])
+        except Exception:
+            continue
+
+    section_lines: list[str] = []
+    if proxy_de_stock > 0:
+        section_lines.append(f'Прокси Германия | <b>{proxy_de_stock}</b>')
+    if proxy_us_stock > 0:
+        section_lines.append(f'Прокси США | <b>{proxy_us_stock}</b>')
+    if tg_stock > 0:
+        section_lines.append(f'TG аккаунты | <b>{tg_stock}</b>')
+    if email_stock > 0:
+        section_lines.append(f'Почты | <b>{email_stock}</b>')
+
+    if section_lines:
+        box_rows = ['╭──── Доступно сейчас']
+        for idx, line in enumerate(section_lines):
+            prefix = '╰' if idx == len(section_lines) - 1 else '├'
+            box_rows.append(f'{prefix} ⬅️ {line}')
+        sections_text = '\n'.join(box_rows) + '\n\n'
+    else:
+        sections_text = ''
+
+    header = intro_text.strip()
+    if not header or header == 'Главное меню:':
+        header = '✨ <b>Lune Shop</b>'
+
+    return (
+        f'{header}\n\n'
+        f'💎 Баланс: <b>{balance:.2f} ₽</b>\n'
+        f'📦 В наличии: <b>{total_positions}</b> позиций / <b>{total_stock}</b> шт.\n\n'
+        f'{sections_text}'
+        '⚡ Выберите действие:'
+    )
+
+
+def _filter_proxy_products_by_region(region_key: str) -> list[tuple]:
+    proxy_products = list_products('proxy')
+    if region_key == 'proxy_de':
+        region_tokens = ('герм', 'german', 'germany', 'deutsch', '🇩🇪')
+    elif region_key == 'proxy_us':
+        region_tokens = ('сша', 'usa', 'america', 'америк', '🇺🇸')
+    else:
+        return proxy_products
+
+    filtered = []
+    for row in proxy_products:
+        title = str(row[1] or '').lower()
+        description = str(row[2] or '').lower()
+        if region_key == 'proxy_de' and '[proxy_region:de]' in description:
+            filtered.append(row)
+            continue
+        if region_key == 'proxy_us' and '[proxy_region:us]' in description:
+            filtered.append(row)
+            continue
+        full_text = f'{title} {description}'
+        if any(token in full_text for token in region_tokens):
+            filtered.append(row)
+    return filtered
+
+
+def get_catalog_products(catalog_key: str) -> list[tuple]:
+    if catalog_key in {'proxy_de', 'proxy_us'}:
+        return _filter_proxy_products_by_region(catalog_key)
+    if catalog_key in CATEGORY_NAMES:
+        return list_products(catalog_key)
+    return []
+
+
+def get_catalog_stock_units(catalog_key: str) -> int:
+    rows = get_catalog_products(catalog_key)
+    total = 0
+    for row in rows:
+        try:
+            total += int(row[4])
+        except Exception:
+            continue
+    return total
+
+
+def proxy_sections_kb() -> InlineKeyboardMarkup:
+    de_count = get_catalog_stock_units('proxy_de')
+    us_count = get_catalog_stock_units('proxy_us')
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton(f'🇩🇪 Германия | {de_count}', callback_data='cat:proxy_de'))
+    kb.add(InlineKeyboardButton(f'🇺🇸 США | {us_count}', callback_data='cat:proxy_us'))
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:catalog'))
+    return kb
+
+
 def main_menu_kb(user_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton('📦 Категории', callback_data='menu:catalog'),
+        InlineKeyboardButton('🛒 Каталог', callback_data='menu:catalog'),
         InlineKeyboardButton('👤 Профиль', callback_data='menu:profile'),
     )
     kb.add(
-        InlineKeyboardButton('📄 Пользовательское соглашение', callback_data='menu:agreement'),
-        InlineKeyboardButton('💳 Пополнить баланс', callback_data='menu:topup'),
+        InlineKeyboardButton('💰 Пополнить', callback_data='menu:topup'),
+        InlineKeyboardButton('📋 Правила', callback_data='menu:agreement'),
     )
     kb.add(
         InlineKeyboardButton('⭐ Отзывы', callback_data='menu:reviews'),
@@ -365,69 +537,69 @@ def back_to_main_kb() -> InlineKeyboardMarkup:
 
 def profile_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('📊 Центр уведомлений', callback_data='profile:hub'))
-    kb.add(InlineKeyboardButton('🧾 История покупок', callback_data='profile:orders'))
-    kb.add(InlineKeyboardButton('💸 История пополнений', callback_data='profile:topups'))
-    kb.add(InlineKeyboardButton('🎯 Ежедневный бонус', callback_data='profile:dailybonus'))
-    kb.add(InlineKeyboardButton('🎁 Активировать промо', callback_data='profile:promo'))
+    kb.add(InlineKeyboardButton('🏠 Центр профиля', callback_data='profile:hub'))
+    kb.add(InlineKeyboardButton('🛒 Мои покупки', callback_data='profile:orders'))
+    kb.add(InlineKeyboardButton('💳 Мои пополнения', callback_data='profile:topups'))
+    kb.add(InlineKeyboardButton('🎫 Активировать промокод', callback_data='profile:promo'))
     kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
     return kb
 
 
 def build_profile_hub_text(user_id: int) -> str:
     balance = get_balance(user_id)
-    bonus_left = get_daily_bonus_remaining_seconds(user_id, cooldown_hours=DAILY_BONUS_COOLDOWN_HOURS)
-    if bonus_left <= 0:
-        bonus_text = 'доступен сейчас ✅'
-    else:
-        hours_left = bonus_left // 3600
-        minutes_left = (bonus_left % 3600) // 60
-        bonus_text = f'через {hours_left} ч {minutes_left} мин'
 
     rows = list_user_orders(user_id, limit=3)
     if rows:
-        last_orders = []
+        order_lines = []
         for order_id, title, qty, total, status, _, _ in rows:
             safe_title = html.escape((title or 'Товар').strip())
             safe_status = html.escape(str(status or 'unknown'))
-            last_orders.append(f'#{order_id} {safe_title} x{qty} | {total:.2f} ₽ | {safe_status}')
-        orders_text = '\n'.join(last_orders)
+            order_lines.append(f'#{order_id} {safe_title} ×{qty} • {total:.2f} ₽ • {safe_status}')
     else:
-        orders_text = 'Покупок пока нет.'
+        order_lines = ['Покупок пока нет']
 
-    return (
-        '📊 Центр уведомлений\n\n'
-        f'ID: <code>{user_id}</code>\n'
-        f'Баланс: <b>{balance:.2f} ₽</b>\n'
-        f'Кешбэк: <b>{PURCHASE_CASHBACK_PERCENT:.2f}%</b>\n'
-        f'Ежедневный бонус: <b>{bonus_text}</b>\n\n'
-        'Последние покупки:\n'
-        f'{orders_text}'
-    )
+    lines = [
+        f'ID: <code>{user_id}</code>',
+        f'Баланс: <b>{balance:.2f} ₽</b>',
+        f'Кешбэк: <b>{PURCHASE_CASHBACK_PERCENT:.2f}%</b>',
+        'Последние покупки:',
+        *order_lines,
+    ]
+
+    box_rows = ['╭──── 🪪 Личный кабинет']
+    for idx, line in enumerate(lines):
+        prefix = '╰' if idx == len(lines) - 1 else '├'
+        box_rows.append(f'{prefix} {line}')
+    return '\n'.join(box_rows)
 
 
 def catalog_kb() -> InlineKeyboardMarkup:
+    proxy_count = get_catalog_stock_units('proxy')
+    tg_count = get_catalog_stock_units('tg')
+    email_count = get_catalog_stock_units('email')
+
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton(CATEGORY_NAMES['proxy'], callback_data='cat:proxy'))
-    kb.add(InlineKeyboardButton(CATEGORY_NAMES['tg'], callback_data='cat:tg'))
-    kb.add(InlineKeyboardButton(CATEGORY_NAMES['email'], callback_data='cat:email'))
+    kb.add(InlineKeyboardButton(f"{CATEGORY_NAMES['proxy']} | {proxy_count}", callback_data='cat:proxy'))
+    kb.add(InlineKeyboardButton(f"{CATEGORY_NAMES['tg']} | {tg_count}", callback_data='cat:tg'))
+    kb.add(InlineKeyboardButton(f"{CATEGORY_NAMES['email']} | {email_count}", callback_data='cat:email'))
     kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
     return kb
 
 
 def category_products_kb(category: str, page: int = 0) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    products = list_products(category)
+    products = get_catalog_products(category)
     total = len(products)
     start = page * PRODUCTS_PAGE_SIZE
     end = start + PRODUCTS_PAGE_SIZE
     page_items = products[start:end]
 
     for product_id, title, _, price, stock, _ in page_items:
+        price_text = f'{float(price):.2f}'.rstrip('0').rstrip('.')
         kb.add(
             InlineKeyboardButton(
-                f'{title} — {price:.0f} ₽ — {stock} шт.',
-                callback_data=f'buy:{product_id}:{page}',
+                f'{title} — {price_text} ₽ — {stock} шт.',
+                callback_data=f'buy:{product_id}:{page}:{category}',
             )
         )
 
@@ -444,17 +616,17 @@ def category_products_kb(category: str, page: int = 0) -> InlineKeyboardMarkup:
 
 
 def category_products_text(category: str, page: int = 0) -> str:
-    products = list_products(category)
+    products = get_catalog_products(category)
     total = len(products)
     start = page * PRODUCTS_PAGE_SIZE
     end = min(start + PRODUCTS_PAGE_SIZE, total)
-    category_title = CATEGORY_NAMES.get(category, category)
+    category_title = CATALOG_VIEW_NAMES.get(category, CATEGORY_NAMES.get(category, category))
     page_label = f'{start + 1}-{end}' if total > 0 else '0-0'
     return (
-        '🛒 Купить товар\n'
-        f'├ Категория: {category_title}\n'
-        '└ Позиция: Не выбрана\n\n'
-        f'📌 Выберите один из предложенных вариантов ({page_label} из {total}):'
+        '╭──── 🛒 <b>Каталог товаров</b>\n'
+        f'├ Категория: <b>{category_title}</b>\n'
+        '├ Позиция: не выбрана\n'
+        f'╰ Доступные варианты: <b>{page_label}</b> из <b>{total}</b>'
     )
 
 
@@ -463,29 +635,23 @@ def quantity_kb(product_id: int, category: str, max_qty: int, page: int = 0) -> 
     safe_max = min(max_qty, 10) if max_qty > 0 else 1
     for qty in range(1, safe_max + 1):
         kb.insert(InlineKeyboardButton(str(qty), callback_data=f'qty:{product_id}:{qty}'))
-    kb.add(InlineKeyboardButton('✍️ Свое количество', callback_data=f'qtycustom:{product_id}:{page}'))
-    kb.add(InlineKeyboardButton('↩️ Назад', callback_data=f'buy:{product_id}:{page}'))
+    kb.add(InlineKeyboardButton('✍️ Свое количество', callback_data=f'qtycustom:{product_id}:{page}:{category}'))
+    kb.add(InlineKeyboardButton('↩️ Назад', callback_data=f'buy:{product_id}:{page}:{category}'))
     return kb
 
 
 def product_card_text(title: str, category: str, price: float, stock: int, description: str) -> str:
     category_title = CATEGORY_NAMES.get(category, category)
-    format_line = description if description else 'Логин:Пароль'
     return (
-        '🛒 Купить товар\n'
-        f'├ Категория: {category_title}\n'
-        f'└ Позиция: {title}\n\n'
-        f'├ Стоимость: {price:.2f} ₽\n'
-        f'└ Количество: {stock} шт.\n'
-        '────────────────────\n'
-        f'Формат выдачи: {format_line}'
+        '╭──── 🛒 <b>Карточка товара</b>\n'
+        f'├ Категория: <b>{category_title}</b>\n'
+        f'├ Позиция: <b>{title}</b>\n'
+        f'├ Стоимость: <b>{price:.2f} ₽</b>\n'
+        f'╰ В наличии: <b>{stock} шт.</b>'
     )
 
 
-def format_delivery_credentials(credentials: str, qty: int) -> str:
-    if qty <= 0:
-        return ''
-
+def split_credentials_items(credentials: str) -> list[str]:
     items: list[str] = []
     for raw_line in (credentials or '').splitlines():
         line = raw_line.strip()
@@ -495,6 +661,14 @@ def format_delivery_credentials(credentials: str, qty: int) -> str:
             items.extend(chunk.strip() for chunk in line.split('|') if chunk.strip())
         else:
             items.append(line)
+    return items
+
+
+def format_delivery_credentials(credentials: str, qty: int) -> str:
+    if qty <= 0:
+        return ''
+
+    items = split_credentials_items(credentials)
 
     if not items:
         return 'Данные отсутствуют. Обратитесь к администратору.'
@@ -510,26 +684,268 @@ def format_delivery_credentials(credentials: str, qty: int) -> str:
 def topup_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton('50₽', callback_data='topup:50'),
-        InlineKeyboardButton('100₽', callback_data='topup:100'),
+        InlineKeyboardButton('💸 50₽', callback_data='topup:50'),
+        InlineKeyboardButton('💸 100₽', callback_data='topup:100'),
     )
     kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
     return kb
 
 
-def admin_panel_kb() -> InlineKeyboardMarkup:
+def review_offer_kb(order_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('➕ Загрузить товар (мастер)', callback_data='admpanel:add_product'))
-    kb.add(InlineKeyboardButton('💳 Пополнить баланс пользователя', callback_data='admpanel:add_balance'))
-    kb.add(InlineKeyboardButton('✅ Подтвердить пополнение', callback_data='admpanel:confirm_topup'))
-    kb.add(InlineKeyboardButton('🎁 Создать промокод', callback_data='admpanel:create_promo'))
-    kb.add(InlineKeyboardButton('📨 Отправить код по заказу', callback_data='admpanel:send_code'))
-    kb.add(InlineKeyboardButton('📥 Пополнить остаток', callback_data='admpanel:refill'))
-    kb.add(InlineKeyboardButton('🧮 Установить остаток', callback_data='admpanel:set_stock'))
+    kb.add(InlineKeyboardButton('✍️ Оставить отзыв', callback_data=f'review:start:{order_id}'))
+    kb.add(InlineKeyboardButton('🔙 В меню', callback_data='menu:main'))
+    return kb
+
+
+def review_rating_kb(order_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=5)
+    kb.add(
+        InlineKeyboardButton('1⭐', callback_data=f'review:rate:{order_id}:1'),
+        InlineKeyboardButton('2⭐', callback_data=f'review:rate:{order_id}:2'),
+        InlineKeyboardButton('3⭐', callback_data=f'review:rate:{order_id}:3'),
+        InlineKeyboardButton('4⭐', callback_data=f'review:rate:{order_id}:4'),
+        InlineKeyboardButton('5⭐', callback_data=f'review:rate:{order_id}:5'),
+    )
+    kb.add(InlineKeyboardButton('🔙 В меню', callback_data='menu:main'))
+    return kb
+
+
+def reviews_nav_kb(page: int, total_count: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=2)
+    max_page = max((max(0, total_count) - 1) // REVIEWS_PAGE_SIZE, 0)
+    safe_page = min(max(0, int(page)), max_page)
+
+    nav_row = []
+    if safe_page > 0:
+        nav_row.append(InlineKeyboardButton('⬅️ Предыдущий', callback_data=f'reviews:page:{safe_page - 1}'))
+    if safe_page < max_page:
+        nav_row.append(InlineKeyboardButton('➡️ Следующий', callback_data=f'reviews:page:{safe_page + 1}'))
+    if nav_row:
+        kb.row(*nav_row)
+
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    return kb
+
+
+def _avg_rating_stars(avg_rating: float) -> str:
+    rounded = int(round(max(0.0, min(5.0, float(avg_rating)))))
+    return '★' * rounded + '☆' * (5 - rounded)
+
+
+def reviews_text_page(page: int = 0) -> tuple[str, int]:
+    rows, total_count = list_reviews_page(page=page, page_size=REVIEWS_PAGE_SIZE, active_only=True)
+    reviews_count, avg_rating = get_reviews_stats(active_only=True)
+    stars = _avg_rating_stars(avg_rating)
+
+    lines = [
+        '⭐ <b>Отзывы покупателей</b>',
+        f'Общая оценка: <b>{avg_rating:.2f}/5</b> {stars}',
+        f'Всего отзывов: <b>{reviews_count}</b>',
+        '',
+    ]
+
+    if not rows:
+        lines.append('Пока отзывов нет.')
+    else:
+        for review_id, user_id, username, order_id, review_text, rating, _, created_at in rows:
+            safe_text = html.escape(str(review_text or '').strip())
+            if len(safe_text) > 260:
+                safe_text = safe_text[:260] + '...'
+            rating_int = min(5, max(1, int(rating)))
+            rating_stars = '★' * rating_int + '☆' * (5 - rating_int)
+            author = f'@{username}' if str(username or '').strip() else f'ID {user_id}'
+            lines.append(f'╭ Отзыв #{review_id} • заказ #{order_id}')
+            lines.append(f'├ Автор: {html.escape(author)}')
+            lines.append(f'├ Оценка: {rating_stars}')
+            lines.append(f'├ Текст: {safe_text}')
+            lines.append(f'╰ 🕒 {created_at}')
+            lines.append('')
+
+    text = '\n'.join(lines).strip()
+    if len(text) > 3900:
+        text = text[:3900] + '\n...'
+    return text, total_count
+
+
+async def send_review_offer_message(user_id: int, order_id: int) -> None:
+    return
+
+
+async def notify_admins_about_purchase(
+    buyer: types.User,
+    order_id: int,
+    title: str,
+    qty: int,
+    total: float,
+    status: str,
+) -> None:
+    username = str(getattr(buyer, 'username', '') or '').strip()
+    buyer_label = f'@{username}' if username else html.escape(str(getattr(buyer, 'full_name', '') or '').strip() or '-')
+    status_label = {
+        'waiting_phone': 'ожидает номер',
+        'waiting_code': 'ожидает код',
+        'delivered': 'выдан',
+    }.get(status, status)
+
+    text = (
+        f'🛒 Новая покупка #{order_id}\n'
+        f'Пользователь: {buyer.id} ({buyer_label})\n'
+        f'Товар: {html.escape(str(title))}\n'
+        f'Количество: {int(qty)}\n'
+        f'Сумма: {float(total):.2f} ₽\n'
+        f'Статус: {status_label}'
+    )
+
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, text)
+        except Exception:
+            pass
+
+
+def admin_panel_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(InlineKeyboardButton('🆕 Добавить товар', callback_data='admpanel:add_product'))
+    kb.add(
+        InlineKeyboardButton('📦 Товары', callback_data='admpanel:section_products'),
+        InlineKeyboardButton('💳 Финансы', callback_data='admpanel:section_finance'),
+    )
+    kb.add(InlineKeyboardButton('🧩 Прочее', callback_data='admpanel:section_other'))
+    kb.add(InlineKeyboardButton('❌ Отмена', callback_data='admpanel:cancel_any'))
+    kb.add(InlineKeyboardButton('🔙 В главное меню', callback_data='menu:main'))
+    return kb
+
+
+def admin_products_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton('➕ Добавить данные в товар', callback_data='admpanel:append_credentials'))
+    kb.add(InlineKeyboardButton('📄 Список товаров', callback_data='admpanel:list_products'))
     kb.add(InlineKeyboardButton('🗑 Удалить товар', callback_data='admpanel:delete_product'))
-    kb.add(InlineKeyboardButton('📋 Список товаров', callback_data='admpanel:list_products'))
-    kb.add(InlineKeyboardButton('❌ Отмена действия', callback_data='admpanel:cancel_any'))
-    kb.add(InlineKeyboardButton('🔙 Главное меню', callback_data='menu:main'))
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='admpanel:home'))
+    return kb
+
+
+def admin_finance_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton('💸 Пополнить баланс', callback_data='admpanel:add_balance'))
+    kb.add(InlineKeyboardButton('✅ Подтвердить пополнение', callback_data='admpanel:confirm_topup'))
+    kb.add(InlineKeyboardButton('🎟 Создать промокод', callback_data='admpanel:create_promo'))
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='admpanel:home'))
+    return kb
+
+
+def admin_other_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton('🧾 Админ логи', callback_data='admpanel:view_logs'))
+    kb.add(InlineKeyboardButton('📦 Пополнить остаток', callback_data='admpanel:refill'))
+    kb.add(InlineKeyboardButton('🧮 Установить остаток', callback_data='admpanel:set_stock'))
+    kb.add(InlineKeyboardButton('📨 Выдать код по заказу', callback_data='admpanel:send_code'))
+    kb.add(InlineKeyboardButton('🗑 Удалить отзыв', callback_data='admpanel:delete_review'))
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='admpanel:home'))
+    return kb
+
+
+def admin_panel_text(user_id: int) -> str:
+    return (
+        '╭──── 🛠 <b>Админ-панель</b>\n'
+        f'├ Админ ID: <code>{user_id}</code>\n'
+        '├ Верхняя кнопка: добавить товар\n'
+        '├ Разделы: товары / финансы / прочее\n'
+        '╰ Выбери нужный раздел'
+    )
+
+
+def admin_logs_filter_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton('🧾 Все админы', callback_data='admlogs:all'))
+    for admin_id in sorted(ADMIN_IDS):
+        kb.add(InlineKeyboardButton(f'👤 {admin_id}', callback_data=f'admlogs:{admin_id}'))
+    kb.add(InlineKeyboardButton('🔙 В админ панель', callback_data='admpanel:home'))
+    return kb
+
+
+def admin_logs_text(limit: int = 30, admin_id: Optional[int] = None) -> str:
+    rows = list_admin_logs(limit=max(200, int(limit) * 8))
+    if admin_id is not None:
+        rows = [row for row in rows if int(row[1]) == int(admin_id)]
+    rows = rows[: max(1, int(limit))]
+
+    if not rows:
+        if admin_id is None:
+            return '🧾 Логи пока пустые.'
+        return f'🧾 Логи для admin_id={admin_id} пока пустые.'
+
+    if admin_id is None:
+        lines = ['🧾 Последние действия админов:']
+    else:
+        lines = [f'🧾 Действия admin_id={admin_id}:']
+
+    for log_id, admin_id, action, details, created_at in rows:
+        safe_action = html.escape(str(action or 'action'))
+        safe_details = html.escape(str(details or '').strip())
+        if len(safe_details) > 140:
+            safe_details = safe_details[:140] + '...'
+        if safe_details:
+            lines.append(f'#{log_id} | admin={admin_id} | {safe_action} | {safe_details} | {created_at}')
+        else:
+            lines.append(f'#{log_id} | admin={admin_id} | {safe_action} | {created_at}')
+
+    text = '\n'.join(lines)
+    if len(text) > 3800:
+        text = text[:3800] + '\n...'
+    return text
+
+
+def admin_owned_product_ids(user_id: int) -> set[int]:
+    rows = list_all_products_admin(admin_id=user_id)
+    ids: set[int] = set()
+    for row in rows:
+        try:
+            ids.add(int(row[0]))
+        except Exception:
+            continue
+    return ids
+
+
+def admin_product_id_prompt_text(user_id: int, title: str) -> str:
+    rows = list_all_products_admin(admin_id=user_id)
+    lines = [title, '', f'Твои товары (admin_id={user_id}):']
+    if not rows:
+        lines.append('— У тебя пока нет товаров')
+    else:
+        for pid, name, category, price, stock, _ in rows[:20]:
+            lines.append(f'#{int(pid)} | {name} | {category} | {float(price):.2f}₽ | stock={int(stock)}')
+        if len(rows) > 20:
+            lines.append('... список сокращен, используй "Список товаров" для полного списка')
+    lines.append('')
+    lines.append('Нажми кнопку товара ниже или введи число product_id вручную.')
+    return '\n'.join(lines)
+
+
+def admin_product_select_kb(user_id: int, action: str) -> InlineKeyboardMarkup:
+    rows = list_all_products_admin(admin_id=user_id)
+    action_code_map = {
+        'append_credentials': 'app',
+        'refill': 'ref',
+        'set_stock': 'set',
+        'delete_product': 'del',
+    }
+    action_code = action_code_map.get(action, '')
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    if action_code:
+        for pid, name, _, _, _, _ in rows[:25]:
+            safe_name = str(name or 'Товар').strip()
+            if len(safe_name) > 34:
+                safe_name = safe_name[:34] + '...'
+            kb.add(
+                InlineKeyboardButton(
+                    f'#{int(pid)} • {safe_name}',
+                    callback_data=f'admpsel:{action_code}:{int(pid)}',
+                )
+            )
+    kb.add(InlineKeyboardButton('🔙 В админ панель', callback_data='admpanel:home'))
     return kb
 
 
@@ -540,6 +956,44 @@ def admin_category_kb() -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton(CATEGORY_NAMES['email'], callback_data='admaddcat:email'))
     kb.add(InlineKeyboardButton('❌ Отмена', callback_data='admpanel:cancel_add'))
     return kb
+
+
+def admin_proxy_section_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton('🇩🇪 Германия', callback_data='admaddproxy:de'))
+    kb.add(InlineKeyboardButton('🇺🇸 США', callback_data='admaddproxy:us'))
+    kb.add(InlineKeyboardButton('🔙 Назад к категориям', callback_data='admpanel:add_product'))
+    kb.add(InlineKeyboardButton('❌ Отмена', callback_data='admpanel:cancel_add'))
+    return kb
+
+
+def apply_proxy_region_title(title: str, proxy_region: str) -> str:
+    raw_title = str(title or '').strip()
+    if not raw_title:
+        return raw_title
+
+    if proxy_region == 'de':
+        if '🇩🇪' in raw_title:
+            return raw_title
+        return f'🇩🇪 {raw_title}'
+    if proxy_region == 'us':
+        if '🇺🇸' in raw_title:
+            return raw_title
+        return f'🇺🇸 {raw_title}'
+    return raw_title
+
+
+def apply_proxy_region_description(description: str, proxy_region: str) -> str:
+    raw_description = str(description or '').strip()
+    if proxy_region not in {'de', 'us'}:
+        return raw_description
+
+    marker = f'[proxy_region:{proxy_region}]'
+    if marker in raw_description.lower():
+        return raw_description
+    if raw_description:
+        return f'{marker} {raw_description}'
+    return marker
 
 
 def admin_auto_restock_kb() -> InlineKeyboardMarkup:
@@ -571,11 +1025,16 @@ def admin_confirm_product_kb() -> InlineKeyboardMarkup:
 
 
 async def show_main_menu(user_id: int, text: str = 'Главное меню:') -> None:
+    pretty_text = build_main_menu_text(user_id, text)
     try:
-        await bot.send_photo(user_id, photo=MAIN_MENU_PHOTO_URL)
+        await bot.send_photo(
+            user_id,
+            photo=MAIN_MENU_PHOTO_URL,
+            caption=pretty_text,
+            reply_markup=main_menu_kb(user_id),
+        )
     except Exception:
-        pass
-    await bot.send_message(user_id, text, reply_markup=main_menu_kb(user_id))
+        await bot.send_message(user_id, pretty_text, reply_markup=main_menu_kb(user_id))
 
 
 async def safe_edit_text(message: types.Message, text: str, reply_markup: Optional[InlineKeyboardMarkup] = None) -> None:
@@ -583,6 +1042,16 @@ async def safe_edit_text(message: types.Message, text: str, reply_markup: Option
         await message.edit_text(text, reply_markup=reply_markup)
     except MessageNotModified:
         return
+    except Exception:
+        try:
+            await message.edit_caption(caption=text, reply_markup=reply_markup)
+        except MessageNotModified:
+            return
+        except Exception:
+            try:
+                await bot.send_message(message.chat.id, text, reply_markup=reply_markup)
+            except Exception:
+                return
 
 
 async def _run_git_command(args: list[str]) -> tuple[int, str]:
@@ -602,18 +1071,152 @@ async def _run_git_command(args: list[str]) -> tuple[int, str]:
     return process.returncode, output
 
 
+def _github_api_headers(token: str) -> Dict[str, str]:
+    return {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': f'Bearer {token}',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': 'lune-shop-bot-backup',
+    }
+
+
+def _github_get_contents_sha(repo: str, branch: str, remote_path: str, token: str) -> Optional[str]:
+    encoded_path = quote(remote_path, safe='/')
+    url = f'https://api.github.com/repos/{repo}/contents/{encoded_path}?ref={quote(branch, safe="")}'
+    request = Request(url, headers=_github_api_headers(token), method='GET')
+    try:
+        with urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+            if isinstance(payload, dict):
+                sha = payload.get('sha')
+                return str(sha) if sha else None
+            return None
+    except HTTPError as error:
+        if error.code == 404:
+            return None
+        detail = error.read().decode('utf-8', errors='ignore')
+        raise RuntimeError(f'GitHub GET contents failed ({error.code}): {detail}')
+
+
+def _github_put_contents(
+    repo: str,
+    branch: str,
+    remote_path: str,
+    token: str,
+    content_bytes: bytes,
+    message: str,
+    current_sha: Optional[str],
+) -> tuple[bool, str]:
+    encoded_path = quote(remote_path, safe='/')
+    url = f'https://api.github.com/repos/{repo}/contents/{encoded_path}'
+    payload: Dict[str, Any] = {
+        'message': message,
+        'branch': branch,
+        'content': base64.b64encode(content_bytes).decode('ascii'),
+    }
+    if current_sha:
+        payload['sha'] = current_sha
+
+    data = json.dumps(payload).encode('utf-8')
+    request = Request(url, data=data, headers=_github_api_headers(token), method='PUT')
+    try:
+        with urlopen(request, timeout=60) as response:
+            response_payload = response.read().decode('utf-8', errors='ignore')
+            return True, response_payload
+    except HTTPError as error:
+        detail = error.read().decode('utf-8', errors='ignore')
+        return False, f'GitHub PUT contents failed ({error.code}): {detail}'
+
+
+async def _github_backup_worker_api(tracked_files: list[str]) -> None:
+    if not GITHUB_BACKUP_TOKEN:
+        logging.warning('GitHub backup worker: .git not found and GITHUB_BACKUP_TOKEN is empty, API mode disabled.')
+        return
+    if not GITHUB_BACKUP_REPO:
+        logging.warning('GitHub backup worker: .git not found and GITHUB_BACKUP_REPO is empty, API mode disabled.')
+        return
+
+    remote_root = GITHUB_BACKUP_REMOTE_DIR.strip().strip('/').replace('\\', '/')
+    last_uploaded_hashes: Dict[str, str] = {}
+
+    logging.info(
+        'GitHub backup worker (API mode) enabled: repo=%s, branch=%s, dir=%s, interval=%ss, files=%s',
+        GITHUB_BACKUP_REPO,
+        GITHUB_BACKUP_BRANCH,
+        remote_root or '.',
+        GITHUB_BACKUP_INTERVAL_SECONDS,
+        tracked_files,
+    )
+
+    def _read_file_bytes(path: str) -> bytes:
+        with open(path, 'rb') as file:
+            return file.read()
+
+    while True:
+        try:
+            changed = False
+            for rel_path in tracked_files:
+                abs_path = os.path.join(BASE_DIR, rel_path)
+                if not os.path.exists(abs_path):
+                    continue
+
+                content_bytes = await asyncio.to_thread(_read_file_bytes, abs_path)
+                content_hash = hashlib.sha256(content_bytes).hexdigest()
+                if last_uploaded_hashes.get(rel_path) == content_hash:
+                    continue
+
+                normalized_rel = rel_path.replace('\\', '/').lstrip('/')
+                remote_path = f'{remote_root}/{normalized_rel}' if remote_root else normalized_rel
+                current_sha = await asyncio.to_thread(
+                    _github_get_contents_sha,
+                    GITHUB_BACKUP_REPO,
+                    GITHUB_BACKUP_BRANCH,
+                    remote_path,
+                    GITHUB_BACKUP_TOKEN,
+                )
+
+                timestamp = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                message = f'Auto backup {normalized_rel} {timestamp}'
+                ok, result = await asyncio.to_thread(
+                    _github_put_contents,
+                    GITHUB_BACKUP_REPO,
+                    GITHUB_BACKUP_BRANCH,
+                    remote_path,
+                    GITHUB_BACKUP_TOKEN,
+                    content_bytes,
+                    message,
+                    current_sha,
+                )
+                if not ok:
+                    logging.warning('GitHub backup worker (API mode): %s', result[:500])
+                    continue
+
+                last_uploaded_hashes[rel_path] = content_hash
+                changed = True
+                logging.info('GitHub backup worker (API mode): uploaded %s -> %s', rel_path, remote_path)
+
+            if not changed:
+                logging.debug('GitHub backup worker (API mode): no changes detected.')
+        except Exception as error:
+            logging.exception('GitHub backup worker (API mode) failed: %s', error)
+
+        await asyncio.sleep(GITHUB_BACKUP_INTERVAL_SECONDS)
+
+
 async def github_backup_worker() -> None:
     if not GITHUB_BACKUP_ENABLED:
         logging.info('GitHub backup worker is disabled (set GITHUB_BACKUP_ENABLED=1 to enable).')
         return
 
-    if not os.path.exists(os.path.join(BASE_DIR, '.git')):
-        logging.warning('GitHub backup worker: .git directory not found in %s', BASE_DIR)
-        return
-
     tracked_files = [path for path in GITHUB_BACKUP_FILES if os.path.exists(os.path.join(BASE_DIR, path))]
     if not tracked_files:
         logging.warning('GitHub backup worker: no existing files from GITHUB_BACKUP_FILES=%s', GITHUB_BACKUP_FILES)
+        return
+
+    if not os.path.exists(os.path.join(BASE_DIR, '.git')):
+        logging.warning('GitHub backup worker: .git directory not found in %s, switching to GitHub API mode.', BASE_DIR)
+        await _github_backup_worker_api(tracked_files)
         return
 
     logging.info('GitHub backup worker enabled: interval=%ss, files=%s', GITHUB_BACKUP_INTERVAL_SECONDS, tracked_files)
@@ -673,18 +1276,23 @@ async def menu_router(cb: types.CallbackQuery):
             await cb.answer('Только админ', show_alert=True)
             return
         admin_add_product_state.pop(cb.from_user.id, None)
-        await cb.message.edit_text('Панель админа: выбери действие', reply_markup=admin_panel_kb())
+        await safe_edit_text(cb.message, admin_panel_text(cb.from_user.id), reply_markup=admin_panel_kb())
     elif action == 'catalog':
-        await cb.message.edit_text('Выберите категорию:', reply_markup=catalog_kb())
+        await safe_edit_text(cb.message, '🧩 Выберите категорию:', reply_markup=catalog_kb())
     elif action == 'profile':
         await safe_edit_text(cb.message, build_profile_hub_text(cb.from_user.id), reply_markup=profile_kb())
     elif action == 'agreement':
-        await cb.message.edit_text(AGREEMENT_TEXT, reply_markup=back_to_main_kb())
+        try:
+            await cb.message.delete()
+        except Exception:
+            pass
+        await bot.send_message(cb.from_user.id, AGREEMENT_TEXT, reply_markup=back_to_main_kb())
     elif action == 'topup':
-        await cb.message.edit_text(
-            '⚠️ По вынужденным ситуациям пока доступен только такой способ пополнения.\n'
-            'Пополнение через FunPay\n'
-            'Доступные суммы: 50₽ и 100₽.',
+        await safe_edit_text(
+            cb.message,
+            '╭──── 💳 <b>Пополнение баланса</b>\n'
+            '├ Способ: FunPay\n'
+            '╰ Доступные суммы: <b>50 ₽</b> и <b>100 ₽</b>',
             reply_markup=topup_kb(),
         )
     elif action == 'reviews':
@@ -692,14 +1300,88 @@ async def menu_router(cb: types.CallbackQuery):
             await cb.message.delete()
         except Exception:
             pass
-        kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
-        await bot.send_message(cb.from_user.id, 'Отзывы покупателей:', reply_markup=kb)
+        text, total_count = reviews_text_page(page=0)
+        await bot.send_message(cb.from_user.id, text, reply_markup=reviews_nav_kb(0, total_count))
     elif action == 'channel':
         kb = InlineKeyboardMarkup().add(InlineKeyboardButton('Открыть канал', url=CHANNEL_URL))
         kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
-        await cb.message.edit_text('Наш канал:', reply_markup=kb)
+        await safe_edit_text(cb.message, '📢 Наш канал:', reply_markup=kb)
 
+    await cb.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('review:'))
+async def review_router(cb: types.CallbackQuery):
+    parts = cb.data.split(':')
+    if len(parts) < 3:
+        await cb.answer('Неверные данные', show_alert=True)
+        return
+
+    action = parts[1]
+    if action not in {'start', 'rate'}:
+        await cb.answer('Неверное действие', show_alert=True)
+        return
+
+    try:
+        order_id = int(parts[2])
+    except ValueError:
+        await cb.answer('Неверный заказ', show_alert=True)
+        return
+
+    order = get_order(order_id)
+    if not order:
+        await cb.answer('Заказ не найден', show_alert=True)
+        return
+
+    _, user_id, _, _, _, _, _, _, _ = order
+    if int(user_id) != int(cb.from_user.id):
+        await cb.answer('Это не ваш заказ', show_alert=True)
+        return
+
+    if action == 'start':
+        await safe_edit_text(
+            cb.message,
+            f'⭐ Выберите оценку для заказа #{order_id}:',
+            reply_markup=review_rating_kb(order_id),
+        )
+        await cb.answer('Выберите оценку')
+        return
+
+    if len(parts) < 4:
+        await cb.answer('Неверная оценка', show_alert=True)
+        return
+
+    try:
+        rating = int(parts[3])
+    except ValueError:
+        await cb.answer('Неверная оценка', show_alert=True)
+        return
+
+    if rating < 1 or rating > 5:
+        await cb.answer('Оценка должна быть от 1 до 5', show_alert=True)
+        return
+
+    pending_review_input[cb.from_user.id] = {'order_id': order_id, 'rating': rating}
+    await safe_edit_text(
+        cb.message,
+        f'✍️ Напишите текст отзыва для заказа #{order_id} одним сообщением.\n'
+        f'Ваша оценка: <b>{rating}⭐</b>\n'
+        f'После отправки начислим <b>{REVIEW_REWARD_RUB:.0f} ₽</b> на баланс.',
+        reply_markup=InlineKeyboardMarkup().add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main')),
+    )
+    await cb.answer('Жду ваш отзыв')
+
+
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('reviews:page:'))
+async def reviews_page_router(cb: types.CallbackQuery):
+    try:
+        page = int(cb.data.split(':')[2])
+    except Exception:
+        await cb.answer('Неверная страница', show_alert=True)
+        return
+
+    text, total_count = reviews_text_page(page=page)
+    await safe_edit_text(cb.message, text, reply_markup=reviews_nav_kb(page, total_count))
     await cb.answer()
 
 
@@ -713,31 +1395,45 @@ async def profile_router(cb: types.CallbackQuery):
         return
 
     if action == 'orders':
-        rows = list_user_orders(cb.from_user.id, limit=15)
+        rows = list_user_orders(cb.from_user.id, limit=10)
         if not rows:
-            text = 'История покупок пуста.'
+            text = '╭──── 🧾 <b>История покупок</b>\n╰ Покупок пока нет.'
         else:
-            lines = ['🧾 История покупок:']
+            lines = ['╭──── 🧾 <b>История покупок</b>']
+            max_text_len = 3500
             for order_id, title, qty, total, status, code_value, created in rows:
                 safe_title = html.escape(str(title or 'Товар'))
                 safe_status = html.escape(str(status or 'unknown'))
-                lines.append(f'#{order_id} | {safe_title} | x{qty} | {total:.2f}₽ | {safe_status} | {created}')
-                if code_value and str(status).lower() == 'delivered':
+                entry_lines = [
+                    f'├ <b>#{order_id}</b> • {safe_title} • x{qty} • {total:.2f} ₽',
+                    f'├ Статус: {safe_status} • {created}',
+                ]
+                if code_value:
                     safe_value = html.escape(str(code_value).strip())
-                    if len(safe_value) > 800:
-                        safe_value = safe_value[:800] + ' ...'
-                    lines.append(f'Данные: <code>{safe_value}</code>')
+                    if len(safe_value) > 200:
+                        safe_value = safe_value[:200] + ' ...'
+                    entry_lines.append(f'├ Данные: <code>{safe_value}</code>')
+
+                projected = '\n'.join(lines + entry_lines + ['╰ Конец списка'])
+                if len(projected) > max_text_len:
+                    lines.append('├ ... список сокращен')
+                    break
+
+                lines.extend(entry_lines)
+            lines.append('╰ Конец списка')
             text = '\n'.join(lines)
         await safe_edit_text(cb.message, text, reply_markup=profile_kb())
 
     elif action == 'topups':
         rows = list_user_topups(cb.from_user.id, limit=15)
         if not rows:
-            text = 'История пополнений пуста.'
+            text = '╭──── 💸 <b>История пополнений</b>\n╰ Пополнений пока нет.'
         else:
-            lines = ['💸 История пополнений:']
+            lines = ['╭──── 💸 <b>История пополнений</b>']
             for topup_id, amount, status, created in rows:
-                lines.append(f'#{topup_id} | {amount:.2f}₽ | {status} | {created}')
+                safe_status = html.escape(str(status or 'unknown'))
+                lines.append(f'├ <b>#{topup_id}</b> • {amount:.2f} ₽ • {safe_status} • {created}')
+            lines.append('╰ Конец списка')
             text = '\n'.join(lines)
         await safe_edit_text(cb.message, text, reply_markup=profile_kb())
 
@@ -745,66 +1441,37 @@ async def profile_router(cb: types.CallbackQuery):
         pending_promo_input.add(cb.from_user.id)
         await safe_edit_text(cb.message, 'Введите промокод одним сообщением:', reply_markup=back_to_main_kb())
 
-    elif action == 'dailybonus':
-        ok, credited, seconds_left = claim_daily_bonus(
-            cb.from_user.id,
-            DAILY_BONUS_AMOUNT,
-            cooldown_hours=DAILY_BONUS_COOLDOWN_HOURS,
-        )
-        if ok:
-            balance = get_balance(cb.from_user.id)
-            text = (
-                f'🎉 Ежедневный бонус получен: +{credited:.2f} ₽\n'
-                f'Текущий баланс: {balance:.2f} ₽\n\n'
-                f'Следующий бонус будет доступен через {DAILY_BONUS_COOLDOWN_HOURS} ч.'
-            )
-        else:
-            hours_left = seconds_left // 3600
-            minutes_left = (seconds_left % 3600) // 60
-            text = (
-                '⏳ Бонус уже получен.\n'
-                f'Следующая попытка через: {hours_left} ч {minutes_left} мин.'
-            )
-        await safe_edit_text(cb.message, text, reply_markup=profile_kb())
-
     await cb.answer()
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('cat:'))
 async def category_router(cb: types.CallbackQuery):
     category = cb.data.split(':', 1)[1]
-    if category not in CATEGORY_NAMES:
+    if category == 'proxy':
+        await safe_edit_text(
+            cb.message,
+            '🌐 <b>Прокси</b>\n\nВыберите раздел:',
+            reply_markup=proxy_sections_kb(),
+        )
+        await cb.answer()
+        return
+
+    if category not in CATEGORY_NAMES and category not in {'proxy_de', 'proxy_us'}:
         await cb.answer('Категория не найдена', show_alert=True)
         return
 
-    products = list_products(category)
+    products = get_catalog_products(category)
     if not products:
-        await cb.message.edit_text(
-            f'В категории {CATEGORY_NAMES[category]} пока нет товаров в наличии.',
+        await safe_edit_text(
+            cb.message,
+            f'В категории {CATALOG_VIEW_NAMES.get(category, category)} пока нет товаров в наличии.',
             reply_markup=back_to_main_kb(),
         )
         await cb.answer()
         return
 
-    category_photo = {
-        'proxy': PROXY_CATEGORY_PHOTO_URL,
-        'tg': TG_CATEGORY_PHOTO_URL,
-        'email': EMAIL_CATEGORY_PHOTO_URL,
-    }.get(category)
-
-    try:
-        await cb.message.delete()
-    except Exception:
-        pass
-
-    if category_photo:
-        try:
-            await bot.send_photo(cb.from_user.id, photo=category_photo)
-        except Exception:
-            pass
-
     kb = category_products_kb(category, page=0)
-    await bot.send_message(cb.from_user.id, category_products_text(category, page=0), reply_markup=kb)
+    await safe_edit_text(cb.message, category_products_text(category, page=0), reply_markup=kb)
     await cb.answer()
 
 
@@ -812,10 +1479,11 @@ async def category_router(cb: types.CallbackQuery):
 async def category_page_router(cb: types.CallbackQuery):
     _, category, page_str = cb.data.split(':')
     page = int(page_str)
-    products = list_products(category)
+    products = get_catalog_products(category)
     if not products:
-        await cb.message.edit_text(
-            f'В категории {CATEGORY_NAMES.get(category, category)} пока нет товаров в наличии.',
+        await safe_edit_text(
+            cb.message,
+            f'В категории {CATALOG_VIEW_NAMES.get(category, category)} пока нет товаров в наличии.',
             reply_markup=back_to_main_kb(),
         )
         await cb.answer()
@@ -823,7 +1491,8 @@ async def category_page_router(cb: types.CallbackQuery):
 
     max_page = max((len(products) - 1) // PRODUCTS_PAGE_SIZE, 0)
     safe_page = min(max(page, 0), max_page)
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         category_products_text(category, safe_page),
         reply_markup=category_products_kb(category, safe_page),
     )
@@ -836,28 +1505,32 @@ async def buy_router(cb: types.CallbackQuery):
     parts = cb.data.split(':')
     product_id = int(parts[1])
     page = int(parts[2]) if len(parts) > 2 else 0
+    catalog_key = parts[3] if len(parts) > 3 else None
     product = get_product(product_id)
     if not product:
         await cb.answer('Товар не найден', show_alert=True)
         return
 
     _, title, description, price, _, category, stock, *_ = product
+    view_category = catalog_key or category
     if stock <= 0:
         await cb.answer('Нет в наличии', show_alert=True)
         return
 
     text = product_card_text(title, category, float(price), int(stock), description)
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('💰 Купить товар', callback_data=f'qtymenu:{product_id}:{page}'))
-    kb.add(InlineKeyboardButton('↩️ Назад', callback_data=f'catpage:{category}:{page}'))
-    await cb.message.edit_text(text, reply_markup=kb)
+    kb.add(InlineKeyboardButton('💰 Купить товар', callback_data=f'qtymenu:{product_id}:{page}:{view_category}'))
+    kb.add(InlineKeyboardButton('↩️ Назад', callback_data=f'catpage:{view_category}:{page}'))
+    await safe_edit_text(cb.message, text, reply_markup=kb)
     await cb.answer()
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('qtymenu:'))
 async def qty_menu_router(cb: types.CallbackQuery):
     pending_custom_qty_input.pop(cb.from_user.id, None)
-    _, product_id_str, page_str = cb.data.split(':')
+    parts = cb.data.split(':')
+    _, product_id_str, page_str = parts[:3]
+    view_category = parts[3] if len(parts) > 3 else None
     product_id = int(product_id_str)
     page = int(page_str)
     product = get_product(product_id)
@@ -866,17 +1539,19 @@ async def qty_menu_router(cb: types.CallbackQuery):
         return
 
     _, title, _, price, _, category, stock, *_ = product
+    catalog_key = view_category or category
     if stock <= 0:
         await cb.answer('Нет в наличии', show_alert=True)
         return
 
     text = (
-        f'🧾 Покупка: <b>{title}</b>\n'
-        f'Цена: <b>{float(price):.2f} ₽</b>\n'
-        f'Доступно: <b>{int(stock)} шт.</b>\n\n'
-        'Выберите количество:'
+        '╭──── 🧾 <b>Оформление заказа</b>\n'
+        f'├ Товар: <b>{title}</b>\n'
+        f'├ Цена за 1 шт: <b>{float(price):.2f} ₽</b>\n'
+        f'├ В наличии: <b>{int(stock)} шт.</b>\n'
+        '╰ Выберите количество:'
     )
-    await cb.message.edit_text(text, reply_markup=quantity_kb(product_id, category, int(stock), page=page))
+    await safe_edit_text(cb.message, text, reply_markup=quantity_kb(product_id, catalog_key, int(stock), page=page))
     await cb.answer()
 
 
@@ -909,52 +1584,92 @@ async def qty_router(cb: types.CallbackQuery):
             return
 
         total = float(price) * qty
+
+        if category != 'tg':
+            available_items = len(split_credentials_items(credentials))
+            if int(stock) != available_items:
+                try:
+                    set_stock(product_id, available_items)
+                except Exception:
+                    pass
+            if available_items < qty:
+                await cb.answer('Товар временно недоступен: закончились данные', show_alert=True)
+                await safe_edit_text(
+                    cb.message,
+                    '⛔ Покупка временно недоступна.\n'
+                    f'Доступно данных для выдачи: <b>{available_items}</b>.\n'
+                    'Напишите в поддержку или выберите другой товар.',
+                    reply_markup=back_to_main_kb(),
+                )
+                return
+
         if not try_spend_balance(user_id, total):
             await cb.answer('Недостаточно баланса', show_alert=True)
-            await cb.message.edit_text(
-                f'Недостаточно средств для покупки <b>{title}</b>.\nНужно: {total:.2f} ₽',
+            await safe_edit_text(
+                cb.message,
+                '╭──── ❌ <b>Недостаточно средств</b>\n'
+                f'├ Товар: <b>{title}</b>\n'
+                f'├ Нужно: <b>{total:.2f} ₽</b>\n'
+                '╰ Пополните баланс и повторите попытку',
                 reply_markup=topup_kb(),
             )
             return
 
-        update_stock(product_id, -qty)
-
         if category == 'tg':
+            update_stock(product_id, -qty)
             order_id = create_order(user_id, product_id, qty, total, 'waiting_phone')
             pending_tg_phone_order[user_id] = order_id
+            await notify_admins_about_purchase(cb.from_user, order_id, title, qty, total, 'waiting_phone')
             cashback = calculate_cashback(total)
             if cashback > 0:
                 change_balance(user_id, cashback)
             balance = get_balance(user_id)
             cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
-            await cb.message.edit_text(
-                f'✅ Оплата принята. Заказ #{order_id} создан.\n'
-                'Отправьте номер для получения кода подтверждения (пример: +420123456789).\n'
+            await safe_edit_text(
+                cb.message,
+                '╭──── ✅ <b>Оплата принята</b>\n'
+                f'├ Заказ: <b>#{order_id}</b>\n'
+                '├ Отправьте номер для кода\n'
+                '├ Пример: <code>+420123456789</code>\n'
                 f'{cashback_text}'
-                f'Остаток баланса: {balance:.2f} ₽',
+                f'├ Баланс: <b>{balance:.2f} ₽</b>\n'
+                '╰ Поддержка: @your_support_user',
                 reply_markup=back_to_main_kb(),
             )
             await cb.answer('Ожидаю номер')
             return
 
+        delivery_data, _ = consume_product_credentials(product_id, qty)
+        if not delivery_data:
+            change_balance(user_id, total)
+            await cb.answer('Товар закончился во время покупки, деньги возвращены', show_alert=True)
+            await safe_edit_text(
+                cb.message,
+                '⛔ Во время оформления товар закончился, сумма возвращена на баланс.\n'
+                'Обновите каталог и попробуйте снова.',
+                reply_markup=back_to_main_kb(),
+            )
+            return
+
         order_id = create_order(user_id, product_id, qty, total, 'delivered')
-        delivery_data = format_delivery_credentials(credentials, qty)
         set_order_code(order_id, delivery_data)
+        await notify_admins_about_purchase(cb.from_user, order_id, title, qty, total, 'delivered')
         cashback = calculate_cashback(total)
         if cashback > 0:
             change_balance(user_id, cashback)
         balance = get_balance(user_id)
         cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
         deliver_text = (
-            f'✅ Заказ #{order_id} успешно оплачен с баланса.\n'
-            f'Товар: <b>{title}</b>\n'
-            f'Количество: {qty}\n'
-            f'Сумма: {total:.2f} ₽\n'
+            f'╭──── ✅ <b>Заказ #{order_id} оплачен</b>\n'
+            f'├ Товар: <b>{title}</b>\n'
+            f'├ Количество: <b>{qty}</b>\n'
+            f'├ Сумма: <b>{total:.2f} ₽</b>\n'
             f'{cashback_text}'
-            f'Остаток баланса: {balance:.2f} ₽\n\n'
-            f'Данные:\n<code>{delivery_data}</code>'
+            f'├ Баланс: <b>{balance:.2f} ₽</b>\n'
+            f'├ Данные:\n<code>{delivery_data}</code>\n'
+            '╰ Поддержка: @your_support_user'
         )
-        await cb.message.edit_text(deliver_text, reply_markup=back_to_main_kb())
+        await safe_edit_text(cb.message, deliver_text, reply_markup=review_offer_kb(order_id))
         await cb.answer('Покупка успешна')
     finally:
         active_buy_users.discard(user_id)
@@ -962,7 +1677,9 @@ async def qty_router(cb: types.CallbackQuery):
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('qtycustom:'))
 async def qty_custom_router(cb: types.CallbackQuery):
-    _, product_id_str, page_str = cb.data.split(':')
+    parts = cb.data.split(':')
+    _, product_id_str, page_str = parts[:3]
+    view_category = parts[3] if len(parts) > 3 else None
     product_id = int(product_id_str)
     page = int(page_str)
     product = get_product(product_id)
@@ -970,17 +1687,19 @@ async def qty_custom_router(cb: types.CallbackQuery):
         await cb.answer('Товар не найден', show_alert=True)
         return
 
-    _, title, _, _, _, _, stock, *_ = product
+    _, title, _, _, _, category, stock, *_ = product
+    catalog_key = view_category or category
     if stock <= 0:
         await cb.answer('Нет в наличии', show_alert=True)
         return
 
-    pending_custom_qty_input[cb.from_user.id] = {'product_id': product_id, 'page': page}
-    await cb.message.edit_text(
+    pending_custom_qty_input[cb.from_user.id] = {'product_id': product_id, 'page': page, 'catalog_key': catalog_key}
+    await safe_edit_text(
+        cb.message,
         f'Введите количество для <b>{title}</b> (от 1 до 10).\n'
         f'Сейчас доступно: <b>{int(stock)} шт.</b>',
         reply_markup=InlineKeyboardMarkup().add(
-            InlineKeyboardButton('↩️ Назад', callback_data=f'qtymenu:{product_id}:{page}')
+            InlineKeyboardButton('↩️ Назад', callback_data=f'qtymenu:{product_id}:{page}:{catalog_key}')
         ),
     )
     await cb.answer()
@@ -992,23 +1711,37 @@ async def topup_router(cb: types.CallbackQuery):
 
     if action == 'custom':
         pending_custom_topup.add(cb.from_user.id)
-        await cb.message.edit_text('Введите сумму пополнения числом (например 750):', reply_markup=back_to_main_kb())
+        await safe_edit_text(cb.message, 'Введите сумму пополнения числом (например 750):', reply_markup=back_to_main_kb())
         await cb.answer()
         return
 
     amount = float(action)
+    lot_url = resolve_funpay_lot_url(amount)
+    if not lot_url:
+        await safe_edit_text(
+            cb.message,
+            '╭──── ⛔ <b>Пополнение недоступно</b>\n'
+            '├ Для этой суммы нет ссылки на лот FunPay\n'
+            '╰ Настройте FUNPAY_LOT_MAP или FUNPAY_TOPUP_LOT_URL',
+            reply_markup=back_to_main_kb(),
+        )
+        await cb.answer('Лот не настроен', show_alert=True)
+        return
+
     topup_id = create_topup(cb.from_user.id, amount, '')
-    payment_link, payment_id = create_funpay_payment(amount, cb.from_user.id, topup_id)
+    payment_link, payment_id = lot_url, f'fp_{topup_id}'
     set_topup_payment_data(topup_id, payment_link, payment_id)
     if payment_id:
         set_topup_external_status(topup_id, 'created')
 
-    await cb.message.edit_text(
-        f'Заявка на пополнение #{topup_id} создана на {amount:.2f} ₽\n'
-        f'1) Оплатите товар по ссылке: {payment_link}\n'
-        f'2) В комментарии к заказу укажите код: <code>topup_{topup_id}_{cb.from_user.id}</code>\n'
-        f'3) Сумма оплаты должна быть: {amount:.2f} ₽\n\n'
-        'После оплаты баланс подтвердится автоматически (или админом, если API недоступен).',
+    await safe_edit_text(
+        cb.message,
+        f'╭──── ✅ <b>Заявка #{topup_id} создана</b>\n'
+        f'├ Сумма: <b>{amount:.2f} ₽</b>\n'
+        f'├ Ссылка: {payment_link}\n'
+        f'├ Код в комментарий: <code>topup_{topup_id}_{cb.from_user.id}</code>\n'
+        f'├ Оплатить ровно: <b>{amount:.2f} ₽</b>\n'
+        '╰ После оплаты баланс зачислится автоматически',
         reply_markup=back_to_main_kb(),
     )
 
@@ -1040,58 +1773,216 @@ async def admin_panel_router(cb: types.CallbackQuery):
     if action == 'add_product':
         admin_add_product_state[user_id] = {'step': 'category'}
         admin_action_state.pop(user_id, None)
-        await cb.message.edit_text('Выбери категорию для нового товара:', reply_markup=admin_category_kb())
+        await safe_edit_text(cb.message, 'Выбери категорию для нового товара:', reply_markup=admin_category_kb())
+    elif action == 'section_products':
+        admin_add_product_state.pop(user_id, None)
+        admin_action_state.pop(user_id, None)
+        await safe_edit_text(
+            cb.message,
+            '📦 <b>Раздел: Товары</b>\nВыбери действие:',
+            reply_markup=admin_products_kb(),
+        )
+    elif action == 'section_finance':
+        admin_add_product_state.pop(user_id, None)
+        admin_action_state.pop(user_id, None)
+        await safe_edit_text(
+            cb.message,
+            '💳 <b>Раздел: Финансы</b>\nВыбери действие:',
+            reply_markup=admin_finance_kb(),
+        )
+    elif action == 'section_other':
+        admin_add_product_state.pop(user_id, None)
+        admin_action_state.pop(user_id, None)
+        await safe_edit_text(
+            cb.message,
+            '🧩 <b>Раздел: Прочее</b>\nЛоги и склад:',
+            reply_markup=admin_other_kb(),
+        )
+    elif action == 'append_credentials':
+        admin_add_product_state.pop(user_id, None)
+        admin_action_state[user_id] = {'action': 'append_credentials', 'step': 'product_id'}
+        await safe_edit_text(
+            cb.message,
+            admin_product_id_prompt_text(user_id, 'Выбери product_id товара, в который нужно добавить данные:'),
+            reply_markup=admin_product_select_kb(user_id, 'append_credentials'),
+        )
     elif action == 'home':
         admin_add_product_state.pop(user_id, None)
         admin_action_state.pop(user_id, None)
-        await cb.message.edit_text('Панель админа: выбери действие', reply_markup=admin_panel_kb())
+        await safe_edit_text(cb.message, admin_panel_text(cb.from_user.id), reply_markup=admin_panel_kb())
     elif action == 'cancel_add':
         admin_add_product_state.pop(user_id, None)
-        await cb.message.edit_text('Создание товара отменено.', reply_markup=admin_panel_kb())
+        await safe_edit_text(cb.message, 'Создание товара отменено.', reply_markup=admin_panel_kb())
     elif action == 'cancel_any':
         admin_add_product_state.pop(user_id, None)
         admin_action_state.pop(user_id, None)
-        await cb.message.edit_text('Текущее действие отменено.', reply_markup=admin_panel_kb())
+        await safe_edit_text(cb.message, 'Текущее действие отменено.', reply_markup=admin_panel_kb())
     elif action == 'add_balance':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'add_balance', 'step': 'user_id'}
-        await cb.message.edit_text('Введи ID пользователя для пополнения баланса:', reply_markup=admin_step_kb())
+        await safe_edit_text(cb.message, 'Введи ID пользователя для пополнения баланса:', reply_markup=admin_step_kb())
     elif action == 'confirm_topup':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'confirm_topup', 'step': 'topup_id'}
-        await cb.message.edit_text('Введи ID пополнения (topup_id):', reply_markup=admin_step_kb())
+        await safe_edit_text(cb.message, 'Введи ID пополнения (topup_id):', reply_markup=admin_step_kb())
     elif action == 'create_promo':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'create_promo', 'step': 'code'}
-        await cb.message.edit_text('Введи код промокода (например: BONUS50):', reply_markup=admin_step_kb())
+        await safe_edit_text(cb.message, 'Введи код промокода (например: BONUS50):', reply_markup=admin_step_kb())
     elif action == 'send_code':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'send_code', 'step': 'order_id'}
-        await cb.message.edit_text('Введи ID заказа:', reply_markup=admin_step_kb())
+        await safe_edit_text(cb.message, 'Введи ID заказа:', reply_markup=admin_step_kb())
+    elif action == 'delete_review':
+        admin_add_product_state.pop(user_id, None)
+        admin_action_state[user_id] = {'action': 'delete_review', 'step': 'review_id'}
+        rows = list_reviews(limit=10, active_only=True)
+        if not rows:
+            await safe_edit_text(
+                cb.message,
+                'Активных отзывов пока нет.',
+                reply_markup=admin_other_kb(),
+            )
+        else:
+            lines = ['🗑 <b>Удаление отзыва</b>', 'Введи review_id для удаления:', '']
+            for review_id, target_user_id, target_username, order_id, review_text, rating, _, _ in rows:
+                short_text = html.escape(str(review_text or '').strip())
+                if len(short_text) > 55:
+                    short_text = short_text[:55] + '...'
+                display_name = f'@{target_username}' if str(target_username or '').strip() else f'ID {target_user_id}'
+                lines.append(f'#{review_id} | заказ #{order_id} | {html.escape(display_name)} | {int(rating)}⭐ | {short_text}')
+            await safe_edit_text(cb.message, '\n'.join(lines), reply_markup=admin_step_kb())
     elif action == 'refill':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'refill', 'step': 'product_id'}
-        await cb.message.edit_text('Введи product_id для пополнения остатка:', reply_markup=admin_step_kb())
+        await safe_edit_text(
+            cb.message,
+            admin_product_id_prompt_text(user_id, 'Выбери product_id для пополнения остатка:'),
+            reply_markup=admin_product_select_kb(user_id, 'refill'),
+        )
     elif action == 'set_stock':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'set_stock', 'step': 'product_id'}
-        await cb.message.edit_text('Введи product_id для установки остатка:', reply_markup=admin_step_kb())
+        await safe_edit_text(
+            cb.message,
+            admin_product_id_prompt_text(user_id, 'Выбери product_id для установки остатка:'),
+            reply_markup=admin_product_select_kb(user_id, 'set_stock'),
+        )
     elif action == 'delete_product':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'delete_product', 'step': 'product_id'}
-        await cb.message.edit_text('Введи product_id для удаления товара из каталога:', reply_markup=admin_step_kb())
+        await safe_edit_text(
+            cb.message,
+            admin_product_id_prompt_text(user_id, 'Выбери product_id для удаления товара из каталога:'),
+            reply_markup=admin_product_select_kb(user_id, 'delete_product'),
+        )
     elif action == 'list_products':
-        rows = list_all_products_admin()
+        rows = list_all_products_admin(admin_id=user_id)
         if not rows:
-            await cb.message.edit_text('Товаров пока нет.', reply_markup=admin_panel_kb())
+            await safe_edit_text(cb.message, 'У тебя пока нет добавленных товаров.', reply_markup=admin_panel_kb())
         else:
-            lines = ['📋 Товары:']
+            lines = [f'📋 Твои товары (admin_id={user_id}):']
             for pid, title, category, price, stock, auto_restock in rows:
                 auto_text = 'auto' if int(auto_restock) == 1 else 'manual'
                 lines.append(f'#{pid} | {title} | {category} | {float(price):.2f}₽ | stock={int(stock)} | {auto_text}')
-            await cb.message.edit_text('\n'.join(lines), reply_markup=admin_panel_kb())
+            await safe_edit_text(cb.message, '\n'.join(lines), reply_markup=admin_panel_kb())
+    elif action == 'view_logs':
+        await safe_edit_text(
+            cb.message,
+            '🧾 Выбери админа, чьи логи показать:',
+            reply_markup=admin_logs_filter_kb(),
+        )
 
     await cb.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('admpsel:'))
+async def admin_product_select_router(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer('Только админ', show_alert=True)
+        return
+
+    parts = cb.data.split(':', 2)
+    if len(parts) != 3:
+        await cb.answer('Неверные данные', show_alert=True)
+        return
+
+    code = parts[1].strip()
+    try:
+        product_id = int(parts[2].strip())
+    except ValueError:
+        await cb.answer('Неверный product_id', show_alert=True)
+        return
+
+    action_map = {
+        'app': 'append_credentials',
+        'ref': 'refill',
+        'set': 'set_stock',
+        'del': 'delete_product',
+    }
+    action = action_map.get(code)
+    user_id = cb.from_user.id
+    if not action:
+        await cb.answer('Неверное действие', show_alert=True)
+        return
+
+    if product_id not in admin_owned_product_ids(user_id):
+        await cb.answer('Этот товар не из твоих', show_alert=True)
+        return
+
+    admin_add_product_state.pop(user_id, None)
+
+    if action in {'refill', 'set_stock'}:
+        admin_action_state[user_id] = {'action': action, 'step': 'qty', 'product_id': str(product_id)}
+        prompt = 'Введи количество для добавления (+):' if action == 'refill' else 'Введи итоговое количество на складе:'
+        await safe_edit_text(cb.message, f'Выбран товар #{product_id}.\n{prompt}', reply_markup=admin_step_kb())
+        await cb.answer('Товар выбран')
+        return
+
+    if action == 'append_credentials':
+        admin_action_state[user_id] = {'action': action, 'step': 'credentials', 'product_id': str(product_id)}
+        await safe_edit_text(
+            cb.message,
+            f'Выбран товар #{product_id}.\n'
+            'Отправь данные для добавления (каждая строка — отдельная единица товара).\n'
+            'Пример:\nmail1@example.com:pass1\nmail2@example.com:pass2',
+            reply_markup=admin_step_kb(),
+        )
+        await cb.answer('Товар выбран')
+        return
+
+    deleted = deactivate_product(product_id)
+    admin_action_state.pop(user_id, None)
+    if deleted:
+        log_admin_action(user_id, 'delete_product', f'product_id={product_id}')
+        await safe_edit_text(cb.message, f'✅ Товар #{product_id} удален из каталога.', reply_markup=admin_panel_kb())
+        await cb.answer('Удалено')
+    else:
+        await safe_edit_text(cb.message, 'Товар не найден или уже удален.', reply_markup=admin_panel_kb())
+        await cb.answer('Не найдено')
+
+
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('admlogs:'))
+async def admin_logs_router(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer('Только админ', show_alert=True)
+        return
+
+    payload = cb.data.split(':', 1)[1].strip()
+    target_admin_id: Optional[int] = None
+    if payload != 'all':
+        try:
+            target_admin_id = int(payload)
+        except ValueError:
+            await cb.answer('Неверный admin_id', show_alert=True)
+            return
+
+    await safe_edit_text(
+        cb.message,
+        admin_logs_text(limit=40, admin_id=target_admin_id),
+        reply_markup=admin_logs_filter_kb(),
+    )
+    await cb.answer('Логи обновлены')
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('admaddcat:'))
@@ -1111,9 +2002,46 @@ async def admin_add_category_router(cb: types.CallbackQuery):
         await cb.answer('Неверная категория', show_alert=True)
         return
 
+    if category == 'proxy':
+        state['category'] = 'proxy'
+        state['step'] = 'proxy_section'
+        await safe_edit_text(cb.message, 'Выбери раздел для прокси:', reply_markup=admin_proxy_section_kb())
+        await cb.answer()
+        return
+
     state['category'] = category
+    state.pop('proxy_region', None)
     state['step'] = 'title'
-    await cb.message.edit_text('Введи название товара (например: 🇩🇪 Германия 3 дня):')
+    await safe_edit_text(cb.message, 'Введи название товара (например: 🇩🇪 Германия 3 дня):')
+    await cb.answer()
+
+
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('admaddproxy:'))
+async def admin_add_proxy_section_router(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer('Только админ', show_alert=True)
+        return
+
+    user_id = cb.from_user.id
+    state = admin_add_product_state.get(user_id)
+    if not state or state.get('step') != 'proxy_section':
+        await cb.answer('Сначала открой мастер добавления', show_alert=True)
+        return
+
+    section = cb.data.split(':', 1)[1]
+    if section not in {'de', 'us'}:
+        await cb.answer('Неверный раздел', show_alert=True)
+        return
+
+    state['category'] = 'proxy'
+    state['proxy_region'] = section
+    state['step'] = 'title'
+    region_label = '🇩🇪 Германия' if section == 'de' else '🇺🇸 США'
+    await safe_edit_text(
+        cb.message,
+        f'Раздел выбран: {region_label}\n'
+        'Введи название товара (флаг добавится автоматически, если его нет):',
+    )
     await cb.answer()
 
 
@@ -1135,9 +2063,14 @@ async def admin_add_auto_router(cb: types.CallbackQuery):
     state['step'] = 'confirm'
 
     auto_text = 'включено (+1 к складу каждые 30 секунд)' if auto_restock else 'выключено'
-    await cb.message.edit_text(
+    category_label = CATEGORY_NAMES.get(state['category'], state['category'])
+    if state.get('category') == 'proxy' and state.get('proxy_region') in {'de', 'us'}:
+        region_label = '🇩🇪 Германия' if state.get('proxy_region') == 'de' else '🇺🇸 США'
+        category_label = f'{category_label} / {region_label}'
+    await safe_edit_text(
+        cb.message,
         'Проверь данные товара перед сохранением:\n\n'
-        f'Категория: {CATEGORY_NAMES.get(state["category"], state["category"])}\n'
+        f'Категория: {category_label}\n'
         f'Название: {state["title"]}\n'
         f'Цена: {float(state["price"]):.2f} ₽\n'
         f'Остаток: {int(state["stock"])}\n'
@@ -1161,22 +2094,39 @@ async def admin_add_save_router(cb: types.CallbackQuery):
         await cb.answer('Нет данных для сохранения', show_alert=True)
         return
 
+    final_title = state['title']
+    final_description = state['description']
+    if state.get('category') == 'proxy':
+        final_title = apply_proxy_region_title(final_title, state.get('proxy_region', ''))
+        final_description = apply_proxy_region_description(final_description, state.get('proxy_region', ''))
+
     product_id = add_product(
-        state['title'],
+        final_title,
         float(state['price']),
         state['credentials'],
         state['category'],
-        state['description'],
+        final_description,
         int(state['stock']),
         auto_restock=int(state.get('auto_restock', '0')),
         restock_every_minutes=5,
         restock_amount=1,
+        created_by_admin=user_id,
     )
     auto_text = 'включено (+1 к складу каждые 30 секунд)' if int(state.get('auto_restock', '0')) == 1 else 'выключено'
+    category_label = CATEGORY_NAMES.get(state['category'], state['category'])
+    if state.get('category') == 'proxy' and state.get('proxy_region') in {'de', 'us'}:
+        region_label = '🇩🇪 Германия' if state.get('proxy_region') == 'de' else '🇺🇸 США'
+        category_label = f'{category_label} / {region_label}'
+    log_admin_action(
+        user_id,
+        'add_product',
+        f'product_id={product_id}; category={state["category"]}; title={final_title}; stock={int(state["stock"])}',
+    )
     admin_add_product_state.pop(user_id, None)
-    await cb.message.edit_text(
+    await safe_edit_text(
+        cb.message,
         f'✅ Товар добавлен, id={product_id}\n'
-        f'Категория: {CATEGORY_NAMES.get(state["category"], state["category"])}\n'
+        f'Категория: {category_label}\n'
         f'Остаток на складе: {int(state["stock"])}\n'
         f'Автопополнение склада: {auto_text}',
         reply_markup=admin_panel_kb(),
@@ -1224,6 +2174,23 @@ async def text_router(message: types.Message):
                 return
 
             total = float(price) * qty
+
+            if category != 'tg':
+                available_items = len(split_credentials_items(credentials))
+                if int(stock) != available_items:
+                    try:
+                        set_stock(product_id, available_items)
+                    except Exception:
+                        pass
+                if available_items < qty:
+                    await message.answer(
+                        '⛔ Покупка временно недоступна.\n'
+                        f'Доступно данных для выдачи: <b>{available_items}</b>.\n'
+                        'Напишите в поддержку или выберите другой товар.',
+                        reply_markup=back_to_main_kb(),
+                    )
+                    return
+
             if not try_spend_balance(user_id, total):
                 await message.answer(
                     f'Недостаточно средств для покупки <b>{title}</b>.\nНужно: {total:.2f} ₽',
@@ -1231,11 +2198,11 @@ async def text_router(message: types.Message):
                 )
                 return
 
-            update_stock(product_id, -qty)
-
             if category == 'tg':
+                update_stock(product_id, -qty)
                 order_id = create_order(user_id, product_id, qty, total, 'waiting_phone')
                 pending_tg_phone_order[user_id] = order_id
+                await notify_admins_about_purchase(message.from_user, order_id, title, qty, total, 'waiting_phone')
                 cashback = calculate_cashback(total)
                 if cashback > 0:
                     change_balance(user_id, cashback)
@@ -1251,9 +2218,20 @@ async def text_router(message: types.Message):
                 pending_custom_qty_input.pop(user_id, None)
                 return
 
+            delivery_data, _ = consume_product_credentials(product_id, qty)
+            if not delivery_data:
+                change_balance(user_id, total)
+                await message.answer(
+                    '⛔ Во время оформления товар закончился, сумма возвращена на баланс.\n'
+                    'Обновите каталог и попробуйте снова.',
+                    reply_markup=back_to_main_kb(),
+                )
+                pending_custom_qty_input.pop(user_id, None)
+                return
+
             order_id = create_order(user_id, product_id, qty, total, 'delivered')
-            delivery_data = format_delivery_credentials(credentials, qty)
             set_order_code(order_id, delivery_data)
+            await notify_admins_about_purchase(message.from_user, order_id, title, qty, total, 'delivered')
             cashback = calculate_cashback(total)
             if cashback > 0:
                 change_balance(user_id, cashback)
@@ -1267,7 +2245,7 @@ async def text_router(message: types.Message):
                 f'{cashback_text}'
                 f'Остаток баланса: {balance:.2f} ₽\n\n'
                 f'Данные:\n<code>{delivery_data}</code>',
-                reply_markup=back_to_main_kb(),
+                reply_markup=review_offer_kb(order_id),
             )
             pending_custom_qty_input.pop(user_id, None)
             return
@@ -1300,6 +2278,7 @@ async def text_router(message: types.Message):
                 target_user_id = int(state['user_id'])
                 change_balance(target_user_id, amount)
                 balance = get_balance(target_user_id)
+                log_admin_action(user_id, 'add_balance', f'user_id={target_user_id}; amount={amount:.2f}; balance={balance:.2f}')
                 admin_action_state.pop(user_id, None)
                 await message.answer(
                     f'✅ Баланс пользователя {target_user_id} изменен на {amount:.2f} ₽.\nТекущий баланс: {balance:.2f} ₽',
@@ -1325,6 +2304,7 @@ async def text_router(message: types.Message):
 
             _, target_user_id, amount, _ = result
             balance = get_balance(target_user_id)
+            log_admin_action(user_id, 'confirm_topup', f'topup_id={topup_id}; user_id={target_user_id}; amount={float(amount):.2f}')
             admin_action_state.pop(user_id, None)
             await message.answer(
                 f'✅ Пополнение #{topup_id} подтверждено на {float(amount):.2f} ₽.',
@@ -1363,6 +2343,11 @@ async def text_router(message: types.Message):
                     await message.answer('Количество активаций должно быть целым > 0. Введи снова:')
                     return
                 create_promo(state['code'], float(state['amount']), uses)
+                log_admin_action(
+                    user_id,
+                    'create_promo',
+                    f'code={state["code"]}; amount={float(state["amount"]):.2f}; uses={uses}',
+                )
                 admin_action_state.pop(user_id, None)
                 await message.answer(
                     f'✅ Промокод {state["code"]} создан: {float(state["amount"]):.2f} ₽, активаций {uses}',
@@ -1399,6 +2384,7 @@ async def text_router(message: types.Message):
                     await message.answer('Заказ не ожидает код.', reply_markup=admin_panel_kb())
                     return
                 set_order_code(order_id, code)
+                log_admin_action(user_id, 'send_code', f'order_id={order_id}; target_user_id={target_user_id}')
                 admin_action_state.pop(user_id, None)
                 await message.answer('✅ Код отправлен клиенту.', reply_markup=admin_panel_kb())
                 await bot.send_message(target_user_id, f'Код для заказа #{order_id}: <code>{code}</code>')
@@ -1409,7 +2395,16 @@ async def text_router(message: types.Message):
                 try:
                     product_id = int(text)
                 except ValueError:
-                    await message.answer('product_id должен быть числом. Введи снова:')
+                    await message.answer(
+                        admin_product_id_prompt_text(user_id, 'product_id должен быть числом. Выбери из списка:'),
+                        reply_markup=admin_product_select_kb(user_id, action),
+                    )
+                    return
+                if product_id not in admin_owned_product_ids(user_id):
+                    await message.answer(
+                        admin_product_id_prompt_text(user_id, 'Этот product_id не из твоих товаров. Выбери из списка:'),
+                        reply_markup=admin_product_select_kb(user_id, action),
+                    )
                     return
                 state['product_id'] = str(product_id)
                 state['step'] = 'qty'
@@ -1428,26 +2423,96 @@ async def text_router(message: types.Message):
                 if action == 'refill':
                     update_stock(product_id, qty)
                     message_text = f'✅ Остаток товара #{product_id} пополнен на {qty}.'
+                    log_admin_action(user_id, 'refill_stock', f'product_id={product_id}; delta={qty}')
                 else:
                     set_stock(product_id, qty)
                     message_text = f'✅ Остаток товара #{product_id} установлен: {qty}.'
+                    log_admin_action(user_id, 'set_stock', f'product_id={product_id}; stock={qty}')
                 admin_action_state.pop(user_id, None)
                 await message.answer(message_text, reply_markup=admin_panel_kb())
+                return
+
+        if action == 'append_credentials':
+            if step == 'product_id':
+                try:
+                    product_id = int(text)
+                except ValueError:
+                    await message.answer(
+                        admin_product_id_prompt_text(user_id, 'product_id должен быть числом. Выбери из списка:'),
+                        reply_markup=admin_product_select_kb(user_id, action),
+                    )
+                    return
+                if product_id not in admin_owned_product_ids(user_id):
+                    await message.answer(
+                        admin_product_id_prompt_text(user_id, 'Этот product_id не из твоих товаров. Выбери из списка:'),
+                        reply_markup=admin_product_select_kb(user_id, action),
+                    )
+                    return
+                state['product_id'] = str(product_id)
+                state['step'] = 'credentials'
+                await message.answer(
+                    'Отправь данные для добавления (каждая строка — отдельная единица товара).\n'
+                    'Пример:\nmail1@example.com:pass1\nmail2@example.com:pass2'
+                )
+                return
+            if step == 'credentials':
+                product_id = int(state['product_id'])
+                result = append_product_credentials_with_stock(product_id, text)
+                if not result:
+                    await message.answer('Не удалось добавить данные. Проверь product_id и формат данных.')
+                    return
+                added_count, new_stock, _ = result
+                log_admin_action(
+                    user_id,
+                    'append_credentials',
+                    f'product_id={product_id}; added={added_count}; stock={new_stock}',
+                )
+                admin_action_state.pop(user_id, None)
+                await message.answer(
+                    f'✅ Данные добавлены в товар #{product_id}.\nДобавлено позиций: {added_count}\nНовый остаток: {new_stock}',
+                    reply_markup=admin_panel_kb(),
+                )
                 return
 
         if action == 'delete_product' and step == 'product_id':
             try:
                 product_id = int(text)
             except ValueError:
-                await message.answer('product_id должен быть числом. Введи снова:')
+                await message.answer(
+                    admin_product_id_prompt_text(user_id, 'product_id должен быть числом. Выбери из списка:'),
+                    reply_markup=admin_product_select_kb(user_id, action),
+                )
+                return
+            if product_id not in admin_owned_product_ids(user_id):
+                await message.answer(
+                    admin_product_id_prompt_text(user_id, 'Этот product_id не из твоих товаров. Выбери из списка:'),
+                    reply_markup=admin_product_select_kb(user_id, action),
+                )
                 return
 
             deleted = deactivate_product(product_id)
             admin_action_state.pop(user_id, None)
             if deleted:
+                log_admin_action(user_id, 'delete_product', f'product_id={product_id}')
                 await message.answer(f'✅ Товар #{product_id} удален из каталога.', reply_markup=admin_panel_kb())
             else:
                 await message.answer('Товар не найден или уже удален.', reply_markup=admin_panel_kb())
+            return
+
+        if action == 'delete_review' and step == 'review_id':
+            try:
+                review_id = int(text)
+            except ValueError:
+                await message.answer('review_id должен быть числом. Введи снова:')
+                return
+
+            deleted = delete_review(review_id)
+            admin_action_state.pop(user_id, None)
+            if deleted:
+                log_admin_action(user_id, 'delete_review', f'review_id={review_id}')
+                await message.answer(f'✅ Отзыв #{review_id} удален.', reply_markup=admin_panel_kb())
+            else:
+                await message.answer('Отзыв не найден или уже удален.', reply_markup=admin_panel_kb())
             return
 
     if is_admin(user_id) and user_id in admin_add_product_state:
@@ -1521,8 +2586,18 @@ async def text_router(message: types.Message):
             return
 
         pending_custom_topup.discard(user_id)
+        lot_url = resolve_funpay_lot_url(amount)
+        if not lot_url:
+            await message.answer(
+                '⛔ Пополнение временно недоступно.\n\n'
+                'Для этой суммы не настроен лот FunPay.\n'
+                'Админу нужно задать `FUNPAY_LOT_MAP` или `FUNPAY_TOPUP_LOT_URL`.',
+                reply_markup=main_menu_kb(user_id),
+            )
+            return
+
         topup_id = create_topup(user_id, amount, '')
-        payment_link, payment_id = create_funpay_payment(amount, user_id, topup_id)
+        payment_link, payment_id = lot_url, f'fp_{topup_id}'
         set_topup_payment_data(topup_id, payment_link, payment_id)
         if payment_id:
             set_topup_external_status(topup_id, 'created')
@@ -1548,6 +2623,42 @@ async def text_router(message: types.Message):
                 )
             except Exception:
                 pass
+        return
+
+    if user_id in pending_review_input:
+        review_state = pending_review_input.pop(user_id)
+        order_id = int(review_state.get('order_id', 0))
+        rating = int(review_state.get('rating', 5))
+        order = get_order(order_id)
+        if not order:
+            await message.answer('Заказ для отзыва не найден.', reply_markup=main_menu_kb(user_id))
+            return
+
+        _, order_user_id, _, _, _, _, _, _, _ = order
+        if int(order_user_id) != int(user_id):
+            await message.answer('Нельзя оставить отзыв к чужому заказу.', reply_markup=main_menu_kb(user_id))
+            return
+
+        ok, msg, reward, review_id = create_review(
+            user_id,
+            order_id,
+            text,
+            REVIEW_REWARD_RUB,
+            rating=rating,
+            username=(message.from_user.username or ''),
+        )
+        if not ok:
+            await message.answer(f'❌ {msg}', reply_markup=main_menu_kb(user_id))
+            return
+
+        balance = get_balance(user_id)
+        await message.answer(
+            f'✅ Отзыв #{review_id} сохранен!\n'
+            f'Оценка: {rating}⭐\n'
+            f'Начислено за отзыв: {reward:.2f} ₽\n'
+            f'Текущий баланс: {balance:.2f} ₽',
+            reply_markup=main_menu_kb(user_id),
+        )
         return
 
     if user_id in pending_tg_phone_order:
@@ -1588,7 +2699,8 @@ async def cmd_admin(message: types.Message):
         '/confirmtopup <topup_id>\n'
         '/createpromo <CODE> <amount> <uses>\n'
         '/sendcode <order_id> <code>\n'
-        '/addbalance <user_id> <amount>'
+        '/addbalance <user_id> <amount>\n'
+        '/deletereview <review_id>'
     )
 
 
@@ -1599,7 +2711,7 @@ async def cmd_adminpanel(message: types.Message):
         return
     admin_add_product_state.pop(message.from_user.id, None)
     admin_action_state.pop(message.from_user.id, None)
-    await message.reply('Панель админа: выбери действие', reply_markup=admin_panel_kb())
+    await message.reply(admin_panel_text(message.from_user.id), reply_markup=admin_panel_kb())
 
 
 @dp.message_handler(commands=['addproduct'])
@@ -1625,11 +2737,34 @@ async def cmd_addproduct(message: types.Message):
     credentials = parts[4].strip()
     description = parts[5].strip()
 
+    proxy_region = ''
+    if category in {'proxy_de', 'proxy_us'}:
+        proxy_region = 'de' if category == 'proxy_de' else 'us'
+        category = 'proxy'
+
     if category not in CATEGORY_NAMES:
-        await message.reply('Категории: proxy, tg, email')
+        await message.reply('Категории: proxy, proxy_de, proxy_us, tg, email')
         return
 
-    product_id = add_product(title, price, credentials, category, description, stock, auto_restock=0)
+    if category == 'proxy' and proxy_region:
+        title = apply_proxy_region_title(title, proxy_region)
+        description = apply_proxy_region_description(description, proxy_region)
+
+    product_id = add_product(
+        title,
+        price,
+        credentials,
+        category,
+        description,
+        stock,
+        auto_restock=0,
+        created_by_admin=message.from_user.id,
+    )
+    log_admin_action(
+        message.from_user.id,
+        'add_product_cmd',
+        f'product_id={product_id}; category={category}; title={title}; stock={stock}',
+    )
     await message.reply(f'Товар добавлен, id={product_id}')
 
 
@@ -1652,6 +2787,7 @@ async def cmd_refill(message: types.Message):
         return
 
     update_stock(product_id, qty)
+    log_admin_action(message.from_user.id, 'refill_stock_cmd', f'product_id={product_id}; delta={qty}')
     await message.reply('Остаток обновлен')
 
 
@@ -1674,6 +2810,7 @@ async def cmd_setstock(message: types.Message):
         return
 
     set_stock(product_id, qty)
+    log_admin_action(message.from_user.id, 'set_stock_cmd', f'product_id={product_id}; stock={qty}')
     await message.reply('Остаток установлен')
 
 
@@ -1700,6 +2837,7 @@ async def cmd_confirm_topup(message: types.Message):
         return
 
     _, user_id, amount, status = result
+    log_admin_action(message.from_user.id, 'confirm_topup_cmd', f'topup_id={topup_id}; user_id={user_id}; amount={float(amount):.2f}')
     await message.reply(f'Пополнение #{topup_id} подтверждено: {amount:.2f} ₽')
     try:
         balance = get_balance(user_id)
@@ -1731,6 +2869,7 @@ async def cmd_createpromo(message: types.Message):
         return
 
     create_promo(code, amount, uses)
+    log_admin_action(message.from_user.id, 'create_promo_cmd', f'code={code}; amount={amount:.2f}; uses={uses}')
     await message.reply(f'Промокод {code} создан: {amount:.2f} ₽, активаций {uses}')
 
 
@@ -1763,8 +2902,13 @@ async def cmd_sendcode(message: types.Message):
         return
 
     set_order_code(order_id, code)
+    log_admin_action(message.from_user.id, 'send_code_cmd', f'order_id={order_id}; user_id={user_id}')
     await message.reply('Код отправлен клиенту')
-    await bot.send_message(user_id, f'Код для заказа #{order_id}: <code>{code}</code>')
+    await bot.send_message(
+        user_id,
+        f'Код для заказа #{order_id}: <code>{code}</code>',
+        reply_markup=review_offer_kb(order_id),
+    )
 
 
 @dp.message_handler(commands=['addbalance'])
@@ -1787,7 +2931,34 @@ async def cmd_addbalance(message: types.Message):
 
     change_balance(user_id, amount)
     bal = get_balance(user_id)
+    log_admin_action(message.from_user.id, 'add_balance_cmd', f'user_id={user_id}; amount={amount:.2f}; balance={bal:.2f}')
     await message.reply(f'Баланс пользователя {user_id} изменен на {amount:.2f} ₽. Текущий: {bal:.2f} ₽')
+
+
+@dp.message_handler(commands=['deletereview'])
+async def cmd_deletereview(message: types.Message):
+    if not is_admin(message.from_user.id):
+        await message.reply('Только админ')
+        return
+
+    args = message.get_args().strip()
+    if not args:
+        await message.reply('Формат: /deletereview <review_id>')
+        return
+
+    try:
+        review_id = int(args)
+    except ValueError:
+        await message.reply('Неверный review_id')
+        return
+
+    deleted = delete_review(review_id)
+    if not deleted:
+        await message.reply('Отзыв не найден или уже удален')
+        return
+
+    log_admin_action(message.from_user.id, 'delete_review_cmd', f'review_id={review_id}')
+    await message.reply(f'✅ Отзыв #{review_id} удален')
 
 
 async def restock_worker() -> None:
@@ -1896,10 +3067,42 @@ async def auto_confirm_funpay_worker() -> None:
 
 
 async def on_startup(_: Dispatcher):
+    logging.info('Bot starting up...')
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        logging.info('Webhook deleted and pending updates dropped')
+    except Exception as e:
+        logging.warning(f'Failed to delete webhook: {e}')
+    
     asyncio.create_task(restock_worker())
     asyncio.create_task(auto_confirm_funpay_worker())
-    asyncio.create_task(github_backup_worker())
+    
+    if GITHUB_BACKUP_ENABLED:
+        asyncio.create_task(github_backup_worker())
+        logging.info('GitHub backup worker started')
+
+
+async def on_shutdown(_: Dispatcher):
+    logging.info('Bot shutting down...')
+    release_lock()
 
 
 if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+    acquire_lock()
+    
+    try:
+        executor.start_polling(
+            dp,
+            skip_updates=True,
+            on_startup=on_startup,
+            on_shutdown=on_shutdown,
+            timeout=30,
+            relax=0.5,
+            fast=False,
+        )
+    except (KeyboardInterrupt, SystemExit):
+        logging.info('Bot stopped by user')
+    except Exception as e:
+        logging.exception(f'Bot crashed: {e}')
+    finally:
+        release_lock()
