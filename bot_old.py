@@ -365,7 +365,8 @@ def back_to_main_kb() -> InlineKeyboardMarkup:
 
 def user_get_code_kb(order_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('🔐 Получить код', callback_data=f'userreqcode:{order_id}'))
+    kb.add(InlineKeyboardButton('🔐 Получить код для входа', callback_data=f'userreqcode:{order_id}'))
+    kb.add(InlineKeyboardButton('⭐ Оставить отзыв', callback_data='menu:reviews'))
     kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
     return kb
 
@@ -968,8 +969,8 @@ async def qty_router(cb: types.CallbackQuery):
             cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
             await cb.message.edit_text(
                 f'✅ Оплата принята. Заказ #{order_id} создан.\n'
-                'Отправьте номер для получения кода подтверждения (пример: +420123456789).\n'
-                'После этого нажмите кнопку «Получить код».\n'
+                'Отправьте номер для входа в аккаунт.\n'
+                'После этого нажмите кнопку «Получить код для входа».\n'
                 f'{cashback_text}'
                 f'Остаток баланса: {balance:.2f} ₽',
                 reply_markup=user_get_code_kb(order_id),
@@ -1187,7 +1188,7 @@ async def user_request_code_router(cb: types.CallbackQuery):
         return
 
     if status == 'waiting_phone':
-        await cb.answer('Сначала отправьте номер для получения кода', show_alert=True)
+        await cb.answer('Сначала отправьте номер для входа в аккаунт', show_alert=True)
         return
 
     if status == 'delivered':
@@ -1196,6 +1197,10 @@ async def user_request_code_router(cb: types.CallbackQuery):
 
     product = get_product(int(product_id))
     product_title = html.escape(str(product[1] if product else 'TG аккаунт'))
+    product_data = ''
+    if product:
+        product_data = format_delivery_credentials(str(product[4] or ''), int(qty))
+    safe_product_data = html.escape(product_data) if product_data else 'не указаны'
     phone_value = html.escape(str(client_phone).strip()) if client_phone else 'не указан'
 
     for admin_id in ADMIN_IDS:
@@ -1208,6 +1213,7 @@ async def user_request_code_router(cb: types.CallbackQuery):
                 f'Товар: <b>{product_title}</b>\n'
                 f'Количество: <b>{int(qty)}</b>\n'
                 f'Сумма: <b>{float(total):.2f} ₽</b>\n'
+                f'Данные товара: <code>{safe_product_data}</code>\n'
                 f'Номер: <code>{phone_value}</code>\n\n'
                 f'Отправить код: /sendcode {order_id} 12345',
                 reply_markup=admin_get_code_kb(order_id),
@@ -1367,8 +1373,8 @@ async def text_router(message: types.Message):
                 cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
                 await message.answer(
                     f'✅ Оплата принята. Заказ #{order_id} создан.\n'
-                    'Отправьте номер для получения кода подтверждения (пример: +420123456789).\n'
-                    'После этого нажмите кнопку «Получить код».\n'
+                    'Отправьте номер для входа в аккаунт.\n'
+                    'После этого нажмите кнопку «Получить код для входа».\n'
                     f'{cashback_text}'
                     f'Остаток баланса: {balance:.2f} ₽',
                     reply_markup=user_get_code_kb(order_id),
@@ -1679,10 +1685,19 @@ async def text_router(message: types.Message):
         order_id = pending_tg_phone_order.pop(user_id)
         set_order_phone(order_id, text)
         set_order_status(order_id, 'waiting_code')
+        order = get_order(order_id)
+        product_data = ''
+        if order:
+            _, _, product_id, qty, _, _, _, _, _ = order
+            product = get_product(int(product_id))
+            if product:
+                product_data = format_delivery_credentials(str(product[4] or ''), int(qty))
+        safe_product_data = html.escape(product_data) if product_data else 'не указаны'
 
         await message.answer(
             f'Номер сохранён для заказа #{order_id}.\n'
-            'Нажмите кнопку «Получить код», чтобы отправить запрос администратору.',
+            f'Данные товара для входа: <code>{safe_product_data}</code>\n'
+            'Нажмите кнопку «Получить код для входа», чтобы отправить запрос администратору.',
             reply_markup=user_get_code_kb(order_id),
         )
         return
