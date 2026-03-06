@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import atexit
 import base64
 import datetime
@@ -207,6 +207,7 @@ PROXY_CATEGORY_PHOTO_URL = os.getenv('PROXY_CATEGORY_PHOTO_URL', MAIN_MENU_PHOTO
 EMAIL_CATEGORY_PHOTO_URL = os.getenv('EMAIL_CATEGORY_PHOTO_URL', MAIN_MENU_PHOTO_URL)
 REVIEWS_PHOTO_URL_1 = os.getenv('REVIEWS_PHOTO_URL_1', 'https://i.postimg.cc/DfMRsXp7/a33681df3b4a34e1706da52d4484ab7e.jpg')
 REVIEWS_PHOTO_URL_2 = os.getenv('REVIEWS_PHOTO_URL_2', 'https://i.postimg.cc/wMyfFw4J/EB328F27-0B7A-4338-A923-2BF9D774A300.png')
+WEB_SHOP_URL = os.getenv('WEB_SHOP_URL', '').strip()
 AGREEMENT_TEXT = (
     'Пользовательское соглашение\n\n'
     '1) Общие положения\n'
@@ -453,12 +454,17 @@ def build_main_menu_text(user_id: int, intro_text: str = '') -> str:
     if not header or header == 'Главное меню:':
         header = '✨ <b>Lune Shop</b>'
 
+    site_line = ''
+    if WEB_SHOP_URL.startswith('http'):
+        safe_url = html.escape(WEB_SHOP_URL, quote=True)
+        site_line = f'\n\n🌐 Сайт: <a href="{safe_url}">Открыть магазин</a>'
+
     return (
         f'{header}\n\n'
         f'💎 Баланс: <b>{balance:.2f} ₽</b>\n'
         f'📦 В наличии: <b>{total_positions}</b> позиций / <b>{total_stock}</b> шт.\n\n'
         f'{sections_text}'
-        '⚡ Выберите действие:'
+        f'⚡ Выберите действие:{site_line}'
     )
 
 
@@ -530,6 +536,8 @@ def main_menu_kb(user_id: int) -> InlineKeyboardMarkup:
     )
     if is_admin(user_id):
         kb.add(InlineKeyboardButton('🛠 Админ панель', callback_data='menu:adminpanel'))
+    if WEB_SHOP_URL.startswith('http'):
+        kb.add(InlineKeyboardButton('🌐 Сайт', url=WEB_SHOP_URL))
     return kb
 
 
