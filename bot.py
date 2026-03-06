@@ -164,7 +164,11 @@ def env_bool_or_default(key: str, default: bool) -> bool:
         return default
     return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
 
-API_TOKEN = '8436518410:AAEjrIGo3tdFXhNGtyGqYXKCdCzIHzzLtnA'
+API_TOKEN = os.getenv('TG_BOT_TOKEN', '').strip()
+if not API_TOKEN or API_TOKEN.upper() in {'YOUR_BOT_TOKEN', 'CHANGE_ME'} or ':' not in API_TOKEN:
+    raise RuntimeError(
+        'Invalid TG_BOT_TOKEN. Set a valid bot token in environment variables (or .env file).'
+    )
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ADMIN_IDS: Set[int] = set(
     int(value.strip())
