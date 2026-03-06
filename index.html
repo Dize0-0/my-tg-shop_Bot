@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dize Market</title>
+  <title>Luna Shop</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap");
 
@@ -346,6 +346,15 @@
       margin-bottom: 8px;
     }
 
+    .product-title {
+      font-weight: 800;
+      font-size: 20px;
+      line-height: 1.15;
+      color: #0e1116;
+      margin-bottom: 6px;
+      letter-spacing: 0.01em;
+    }
+
     .pill {
       border: 1px solid #c8d0db;
       border-radius: 999px;
@@ -354,7 +363,12 @@
       color: #4f5867;
     }
 
-    .price { font-weight: 800; color: #f3f5f8; }
+    .price {
+      font-weight: 900;
+      font-size: 18px;
+      color: #06080b;
+      letter-spacing: 0.01em;
+    }
 
     input,
     textarea,
@@ -433,12 +447,13 @@
       height: 100vh;
       transform: translateX(106%);
       transition: transform 0.23s ease;
-      border-left: 1px solid #d4dbe6;
-      background: linear-gradient(180deg, #f8fafc, #f2f5f8);
+      border-left: 1px solid #2a2f38;
+      background: linear-gradient(180deg, #0d0f13, #141820);
+      color: #e9edf5;
       z-index: 80;
       padding: 12px;
       overflow: auto;
-      box-shadow: -20px 0 45px rgba(20, 28, 40, 0.16);
+      box-shadow: -20px 0 45px rgba(0, 0, 0, 0.42);
     }
 
     .drawer.open { transform: translateX(0); }
@@ -449,7 +464,7 @@
       align-items: center;
       margin-bottom: 10px;
       padding-bottom: 8px;
-      border-bottom: 1px solid #d8dfe8;
+      border-bottom: 1px solid #272d37;
     }
 
     .drawer-head strong {
@@ -469,25 +484,28 @@
       text-align: center;
       font-size: 13px;
       padding: 10px 7px;
-      background: #ffffff;
-      border-color: #cfd7e1;
+      background: #171c25;
+      color: #d9e2ef;
+      border-color: #2f3744;
       border-radius: 12px;
       text-transform: none;
       letter-spacing: 0.01em;
     }
 
     .admin-tabs .btn.active {
-      background: #11151c;
-      color: #f6f8fc;
-      border-color: #11151c;
-      box-shadow: 0 8px 20px rgba(17, 21, 28, 0.28);
+      background: #f7fafc;
+      color: #0f141b;
+      border-color: #f7fafc;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
     }
 
     .admin-section { display: none; }
     .admin-section.active { display: block; }
 
     .admin-section .card {
-      box-shadow: 0 10px 24px rgba(16, 24, 36, 0.08);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+      border-color: #2e3743;
+      background: #171c25;
     }
 
     .admin-block-title {
@@ -496,22 +514,22 @@
       font-size: 14px;
       letter-spacing: 0.02em;
       text-transform: uppercase;
-      color: #202833;
+      color: #e8edf6;
       margin-bottom: 8px;
     }
 
     .admin-note {
       font-size: 12px;
-      color: #606978;
+      color: #aeb8c8;
       margin-top: 6px;
     }
 
     .table-wrap {
       max-height: 250px;
       overflow: auto;
-      border: 1px solid #d4dce7;
+      border: 1px solid #2e3743;
       border-radius: 10px;
-      background: #ffffff;
+      background: #11161e;
       margin-top: 8px;
     }
 
@@ -522,14 +540,15 @@
     }
 
     th, td {
-      border-bottom: 1px solid #e5eaf0;
+      border-bottom: 1px solid #242b35;
       padding: 7px 6px;
       text-align: left;
       vertical-align: top;
+      color: #e1e7f2;
     }
 
     tbody tr:hover {
-      background: #f6f9fd;
+      background: #1b222d;
     }
 
     .badge {
@@ -581,11 +600,34 @@
     th {
       font-family: "Plus Jakarta Sans", sans-serif;
       font-weight: 700;
-      color: #2b3340;
-      background: #f7f9fc;
+      color: #f2f6ff;
+      background: #1a212d;
       position: sticky;
       top: 0;
       z-index: 1;
+    }
+
+    .drawer .btn {
+      background: #141922;
+      color: #e3eaf7;
+      border-color: #313a47;
+    }
+
+    .drawer .btn:hover {
+      border-color: #4a5667;
+      background: #1d2532;
+    }
+
+    .drawer .muted {
+      color: #aeb8c8;
+    }
+
+    .drawer input,
+    .drawer textarea,
+    .drawer select {
+      background: #0f141b;
+      border-color: #2a323e;
+      color: #edf2fb;
     }
 
     @media (max-width: 900px) {
@@ -626,7 +668,7 @@
 </head>
 <body>
   <header class="top">
-    <div class="brand">DIZE<span>MARKET</span></div>
+    <div class="brand">LUNA<span>SHOP</span></div>
     <nav class="menu">
       <button class="btn active" data-top="home">Главная</button>
       <button class="btn" data-top="catalog">Каталог</button>
@@ -644,14 +686,14 @@
       <section id="sec-home" class="section active">
         <div class="home-screen">
           <div class="home-row-title">
-            <span class="left">DIZE MARKET</span>
+            <span class="left">LUNA SHOP</span>
             <span class="right">01</span>
           </div>
 
           <div class="home-project-line">
-            <div class="home-logo-word">Digital Goods That Sell Fast And Deliver Instantly</div>
+            <div class="home-logo-word">Luna Shop: прокси и TG-аккаунты с мгновенной выдачей</div>
             <div class="home-copy">
-              Dize Market: аккаунты, прокси, сервисные доступы и товары с моментальной выдачей.
+              Продаем рабочие прокси, Telegram-аккаунты и цифровые данные для запуска и масштабирования ваших задач без ожидания.
             </div>
           </div>
 
@@ -665,8 +707,8 @@
       <section id="sec-catalog" class="section">
         <div class="catalog-intro">
           <div>
-            <div class="big">DIZE MARKET CATALOG</div>
-            <div class="desc">Витрина цифровых товаров с быстрой выдачей, прозрачным балансом и удобным управлением категориями и продуктами.</div>
+            <div class="big">LUNA SHOP CATALOG</div>
+            <div class="desc">Витрина с упором на продажи прокси и TG-аккаунтов: быстрый выбор, удобная оплата, моментальная выдача и постоянное пополнение стока.</div>
           </div>
           <div class="index">00</div>
         </div>
@@ -733,7 +775,7 @@
 
   <aside id="adminDrawer" class="drawer">
     <div class="drawer-head">
-      <strong>Dize Control</strong>
+      <strong>Luna Shop Admin</strong>
       <button class="btn" id="closeAdmin">Закрыть</button>
     </div>
 
@@ -892,7 +934,7 @@
   <div id="status" class="status">Загрузка...</div>
 
   <aside class="contacts">
-    <div style="font-weight:800; margin-bottom:4px;">Поддержка Dize Market</div>
+    <div style="font-weight:800; margin-bottom:4px;">Поддержка Luna Shop</div>
     <div class="muted" id="supportText">Поддержка: @dize_support</div>
     <div style="margin-top:6px;">
       <a id="supportLink" href="https://t.me/dize_support" target="_blank" rel="noopener">Открыть поддержку</a>
@@ -1074,7 +1116,7 @@
         const div = document.createElement("div");
         div.className = "product";
         div.innerHTML = `
-          <div style="font-weight:800; font-size:18px;">${p.title}</div>
+          <div class="product-title">${p.title}</div>
           <div class="muted">${p.description || "Описание отсутствует"}</div>
           <div class="row"><span class="price">${Number(p.price).toFixed(2)} RUB</span><span class="pill">stock ${p.stock}</span></div>
           <div class="row">
