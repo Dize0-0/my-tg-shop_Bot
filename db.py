@@ -144,46 +144,11 @@ def init_db() -> None:
         '''
     )
 
-    cur.execute(
-        '''
-        CREATE TABLE IF NOT EXISTS categories (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            slug TEXT NOT NULL UNIQUE,
-            title TEXT NOT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        '''
-    )
-
     _ensure_column(cur, 'products', 'created_by_admin', 'INTEGER')
     _ensure_column(cur, 'reviews', 'username', 'TEXT')
     _ensure_column(cur, 'reviews', 'rating', 'INTEGER NOT NULL DEFAULT 5')
     _ensure_column(cur, 'reviews', 'reward_amount', 'REAL NOT NULL DEFAULT 0')
     _ensure_column(cur, 'reviews', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
-
-    # Keep default categories available even before any products exist.
-    cur.executemany(
-        '''
-        INSERT OR IGNORE INTO categories (slug, title, is_active)
-        VALUES (?, ?, 1)
-        ''',
-        [
-            ('proxy', 'Прокси'),
-            ('tg', 'TG аккаунты'),
-            ('email', 'Почты'),
-        ],
-    )
-    # Backfill categories table from existing products.
-    cur.execute('SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND TRIM(category) != ""')
-    for row in cur.fetchall():
-        slug = str(row['category'] or '').strip().lower()
-        if not slug:
-            continue
-        cur.execute(
-            'INSERT OR IGNORE INTO categories (slug, title, is_active) VALUES (?, ?, 1)',
-            (slug, slug.upper()),
-        )
 
     conn.commit()
     conn.close()
@@ -252,97 +217,10 @@ def seed_products() -> None:
 def list_categories() -> List[str]:
     conn = _connect()
     cur = conn.cursor()
-    cur.execute(
-        '''
-        SELECT slug
-        FROM categories
-        WHERE is_active = 1
-        ORDER BY id ASC
-        '''
-    )
-    rows = [str(r['slug']) for r in cur.fetchall()]
-    if not rows:
-        cur.execute('SELECT DISTINCT category FROM products WHERE is_active = 1 ORDER BY category')
-        rows = [str(r['category']) for r in cur.fetchall()]
+    cur.execute('SELECT DISTINCT category FROM products WHERE is_active = 1 ORDER BY category')
+    rows = [r['category'] for r in cur.fetchall()]
     conn.close()
     return rows
-
-
-def list_categories_admin(active_only: bool = False) -> List[Tuple]:
-    conn = _connect()
-    cur = conn.cursor()
-    if active_only:
-        cur.execute(
-            '''
-            SELECT id, slug, title, is_active, created_at
-            FROM categories
-            WHERE is_active = 1
-            ORDER BY id ASC
-            '''
-        )
-    else:
-        cur.execute(
-            '''
-            SELECT id, slug, title, is_active, created_at
-            FROM categories
-            ORDER BY id ASC
-            '''
-        )
-    rows = [tuple(r) for r in cur.fetchall()]
-    conn.close()
-    return rows
-
-
-def create_category(slug: str, title: str) -> Tuple[bool, str]:
-    normalized_slug = str(slug or '').strip().lower()
-    normalized_title = str(title or '').strip()
-    if not normalized_slug:
-        return False, 'slug is required'
-    if not normalized_title:
-        normalized_title = normalized_slug.upper()
-
-    conn = _connect()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            '''
-            INSERT INTO categories (slug, title, is_active)
-            VALUES (?, ?, 1)
-            ''',
-            (normalized_slug, normalized_title),
-        )
-        conn.commit()
-        conn.close()
-        return True, normalized_slug
-    except sqlite3.IntegrityError:
-        conn.close()
-        return False, 'category already exists'
-
-
-def update_category(slug: str, title: Optional[str] = None, is_active: Optional[int] = None) -> bool:
-    normalized_slug = str(slug or '').strip().lower()
-    if not normalized_slug:
-        return False
-
-    updates = []
-    values = []
-    if title is not None:
-        updates.append('title = ?')
-        values.append(str(title).strip() or normalized_slug.upper())
-    if is_active is not None:
-        updates.append('is_active = ?')
-        values.append(1 if int(is_active) else 0)
-    if not updates:
-        return False
-
-    values.append(normalized_slug)
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute(f"UPDATE categories SET {', '.join(updates)} WHERE slug = ?", tuple(values))
-    changed = cur.rowcount > 0
-    conn.commit()
-    conn.close()
-    return changed
 
 
 def list_products(category: Optional[str] = None) -> List[Tuple]:
@@ -365,37 +243,6 @@ def list_products(category: Optional[str] = None) -> List[Tuple]:
             FROM products
             WHERE is_active = 1 AND stock > 0
             ORDER BY id
-            '''
-        )
-    rows = [tuple(r) for r in cur.fetchall()]
-    conn.close()
-    return rows
-
-
-def list_web_products(category: Optional[str] = None) -> List[Tuple]:
-    """Returns only products explicitly added by admins for web storefront."""
-    conn = _connect()
-    cur = conn.cursor()
-    if category:
-        cur.execute(
-            '''
-            SELECT id, title, description, price, stock, category
-            FROM products
-            WHERE category = ?
-              AND is_active = 1
-              AND created_by_admin IS NOT NULL
-            ORDER BY id DESC
-            ''',
-            (category,),
-        )
-    else:
-        cur.execute(
-            '''
-            SELECT id, title, description, price, stock, category
-            FROM products
-            WHERE is_active = 1
-              AND created_by_admin IS NOT NULL
-            ORDER BY id DESC
             '''
         )
     rows = [tuple(r) for r in cur.fetchall()]
@@ -1120,116 +967,3 @@ def get_daily_bonus_remaining_seconds(user_id: int, cooldown_hours: int = 24) ->
     if elapsed_seconds >= cooldown_seconds:
         return 0
     return max(1, cooldown_seconds - elapsed_seconds)
-
-
-def set_product_active(product_id: int, is_active: bool) -> bool:
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute(
-        'UPDATE products SET is_active = ?, auto_restock = CASE WHEN ? = 1 THEN auto_restock ELSE 0 END WHERE id = ?',
-        (1 if is_active else 0, 1 if is_active else 0, int(product_id)),
-    )
-    changed = cur.rowcount > 0
-    conn.commit()
-    conn.close()
-    return changed
-
-
-def update_product_fields(
-    product_id: int,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    category: Optional[str] = None,
-    price: Optional[float] = None,
-) -> bool:
-    updates = []
-    values = []
-
-    if title is not None:
-        updates.append('title = ?')
-        values.append(str(title).strip())
-    if description is not None:
-        updates.append('description = ?')
-        values.append(str(description).strip())
-    if category is not None:
-        updates.append('category = ?')
-        values.append(str(category).strip().lower())
-    if price is not None:
-        updates.append('price = ?')
-        values.append(float(price))
-
-    if not updates:
-        return False
-
-    values.append(int(product_id))
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute(f"UPDATE products SET {', '.join(updates)} WHERE id = ?", tuple(values))
-    changed = cur.rowcount > 0
-    conn.commit()
-    conn.close()
-    return changed
-
-
-def list_users_page(page: int = 0, page_size: int = 50) -> Tuple[List[Tuple], int]:
-    safe_page = max(0, int(page))
-    safe_size = max(1, min(200, int(page_size)))
-    offset = safe_page * safe_size
-
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute('SELECT COUNT(1) AS c FROM users')
-    total_count = int(cur.fetchone()['c'])
-    cur.execute(
-        '''
-        SELECT user_id, balance, created_at
-        FROM users
-        ORDER BY user_id DESC
-        LIMIT ? OFFSET ?
-        ''',
-        (safe_size, offset),
-    )
-    rows = [tuple(r) for r in cur.fetchall()]
-    conn.close()
-    return rows, total_count
-
-
-def list_orders_page(page: int = 0, page_size: int = 50) -> Tuple[List[Tuple], int]:
-    safe_page = max(0, int(page))
-    safe_size = max(1, min(200, int(page_size)))
-    offset = safe_page * safe_size
-
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute('SELECT COUNT(1) AS c FROM orders')
-    total_count = int(cur.fetchone()['c'])
-    cur.execute(
-        '''
-        SELECT o.id, o.user_id, o.product_id, p.title, o.quantity, o.total_price, o.status, o.created_at
-        FROM orders o
-        LEFT JOIN products p ON p.id = o.product_id
-        ORDER BY o.id DESC
-        LIMIT ? OFFSET ?
-        ''',
-        (safe_size, offset),
-    )
-    rows = [tuple(r) for r in cur.fetchall()]
-    conn.close()
-    return rows, total_count
-
-
-def list_promo_codes(limit: int = 100) -> List[Tuple]:
-    conn = _connect()
-    cur = conn.cursor()
-    cur.execute(
-        '''
-        SELECT code, amount, uses_left, is_active, created_at
-        FROM promo_codes
-        ORDER BY created_at DESC
-        LIMIT ?
-        ''',
-        (max(1, min(500, int(limit))),),
-    )
-    rows = [tuple(r) for r in cur.fetchall()]
-    conn.close()
-    return rows
