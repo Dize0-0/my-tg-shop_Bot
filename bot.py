@@ -78,7 +78,6 @@ def load_local_env_file(file_path: str = '.env') -> None:
 
 
 load_local_env_file('.env')
-load_local_env_file('.env.example')
 
 
 def env_or_default(key: str, default: str) -> str:
@@ -115,7 +114,18 @@ def env_bool_or_default(key: str, default: bool) -> bool:
         return default
     return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
 
-API_TOKEN = '8436518410:AAFF9AG58xsr1iWsidkD9yoDEqAKfgaAHkY'
+def resolve_bot_token() -> str:
+    token = os.getenv('TG_BOT_TOKEN', '').strip() or os.getenv('BOT_TOKEN', '').strip()
+    if not token:
+        raise RuntimeError(
+            'TG_BOT_TOKEN is not set. Configure TG_BOT_TOKEN in environment variables or .env file.'
+        )
+    if ':' not in token:
+        raise RuntimeError('TG_BOT_TOKEN has invalid format. Expected token like "123456:ABC..."')
+    return token
+
+
+API_TOKEN = resolve_bot_token()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ADMIN_IDS: Set[int] = set(
     int(value.strip())
@@ -129,6 +139,10 @@ FUNPAY_LOT_MAP = os.getenv('FUNPAY_LOT_MAP', '').strip()
 FUNPAY_GOLDEN_KEY = os.getenv('FUNPAY_GOLDEN_KEY', '').strip()
 FUNPAY_LISTEN_DELAY = env_int_or_default('FUNPAY_LISTEN_DELAY', 4)
 FUNPAY_MATCH_BY_AMOUNT = env_or_default('FUNPAY_MATCH_BY_AMOUNT', '1').lower() in {'1', 'true', 'yes', 'on'}
+TOPUP_PROVIDER = env_or_default('TOPUP_PROVIDER', 'funpay').lower().strip()
+LOLZ_PAYMENT_URL = env_or_default('LOLZ_PAYMENT_URL', 'https://lolz.live/')
+LOLZ_TOPUP_LOT_URL = env_or_default('LOLZ_TOPUP_LOT_URL', '')
+LOLZ_LOT_MAP = os.getenv('LOLZ_LOT_MAP', '').strip()
 PURCHASE_CASHBACK_PERCENT = env_float_or_default('PURCHASE_CASHBACK_PERCENT', 2.0)
 DAILY_BONUS_AMOUNT = env_float_or_default('DAILY_BONUS_AMOUNT', 5.0)
 DAILY_BONUS_COOLDOWN_HOURS = env_int_or_default('DAILY_BONUS_COOLDOWN_HOURS', 24)
@@ -208,6 +222,8 @@ topup_marker_re = re.compile(r'topup_(\d+)_(\d+)', re.IGNORECASE)
 
 
 def payment_provider_label() -> str:
+    if TOPUP_PROVIDER == 'lolz':
+        return 'Lolz'
     return 'FunPay'
 
 
@@ -308,6 +324,17 @@ def create_funpay_payment(amount: float, user_id: int, topup_id: int) -> tuple[s
     return lot_url, f'fp_{topup_id}'
 
 
+def create_lolz_payment(amount: float, user_id: int, topup_id: int) -> tuple[str, str]:
+    lot_url = resolve_lolz_lot_url(amount)
+    return lot_url, f'lz_{topup_id}'
+
+
+def create_topup_payment(amount: float, user_id: int, topup_id: int) -> tuple[str, str]:
+    if TOPUP_PROVIDER == 'lolz':
+        return create_lolz_payment(amount, user_id, topup_id)
+    return create_funpay_payment(amount, user_id, topup_id)
+
+
 def resolve_funpay_lot_url(amount: float) -> str:
     amount_key = f'{float(amount):.2f}'
 
@@ -334,6 +361,34 @@ def resolve_funpay_lot_url(amount: float) -> str:
     if FUNPAY_PAYMENT_URL.startswith('http'):
         return FUNPAY_PAYMENT_URL
     return 'https://funpay.com/'
+
+
+def resolve_lolz_lot_url(amount: float) -> str:
+    amount_key = f'{float(amount):.2f}'
+
+    if LOLZ_LOT_MAP:
+        for part in LOLZ_LOT_MAP.split(';'):
+            item = part.strip()
+            if not item or '=' not in item:
+                continue
+            left, right = item.split('=', 1)
+            raw_amount = left.strip().replace(',', '.')
+            url = right.strip()
+            if not url:
+                continue
+            try:
+                if f'{float(raw_amount):.2f}' == amount_key and url.startswith('http'):
+                    return url
+            except Exception:
+                continue
+
+    lot_url = LOLZ_TOPUP_LOT_URL if LOLZ_TOPUP_LOT_URL.startswith('http') else ''
+    if lot_url:
+        return lot_url
+
+    if LOLZ_PAYMENT_URL.startswith('http'):
+        return LOLZ_PAYMENT_URL
+    return 'https://lolz.live/'
 
 
 def is_admin(user_id: int) -> bool:
@@ -723,7 +778,7 @@ async def menu_router(cb: types.CallbackQuery):
     elif action == 'topup':
         await cb.message.edit_text(
             '⚠️ По вынужденным ситуациям пока доступен только такой способ пополнения.\n'
-            'Пополнение через FunPay\n'
+            f'Пополнение через {payment_provider_label()}\n'
             'Доступные суммы: 50₽ и 100₽.',
             reply_markup=topup_kb(),
         )
@@ -1039,7 +1094,7 @@ async def topup_router(cb: types.CallbackQuery):
 
     amount = float(action)
     topup_id = create_topup(cb.from_user.id, amount, '')
-    payment_link, payment_id = create_funpay_payment(amount, cb.from_user.id, topup_id)
+    payment_link, payment_id = create_topup_payment(amount, cb.from_user.id, topup_id)
     set_topup_payment_data(topup_id, payment_link, payment_id)
     if payment_id:
         set_topup_external_status(topup_id, 'created')
@@ -1653,7 +1708,7 @@ async def text_router(message: types.Message):
 
         pending_custom_topup.discard(user_id)
         topup_id = create_topup(user_id, amount, '')
-        payment_link, payment_id = create_funpay_payment(amount, user_id, topup_id)
+        payment_link, payment_id = create_topup_payment(amount, user_id, topup_id)
         set_topup_payment_data(topup_id, payment_link, payment_id)
         if payment_id:
             set_topup_external_status(topup_id, 'created')
@@ -1932,6 +1987,10 @@ async def restock_worker() -> None:
 async def auto_confirm_funpay_worker() -> None:
     global funpay_events_queue
     global funpay_listener_started
+
+    if TOPUP_PROVIDER != 'funpay':
+        logging.info('FunPay auto-confirm disabled: TOPUP_PROVIDER=%s', TOPUP_PROVIDER)
+        return
 
     if not FUNPAY_GOLDEN_KEY:
         logging.info('FunPay auto-confirm disabled: set FUNPAY_GOLDEN_KEY')
