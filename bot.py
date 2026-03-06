@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import datetime
 import html
 import logging
@@ -78,6 +78,7 @@ def load_local_env_file(file_path: str = '.env') -> None:
 
 
 load_local_env_file('.env')
+load_local_env_file('.env.example')
 
 
 def env_or_default(key: str, default: str) -> str:
@@ -114,18 +115,7 @@ def env_bool_or_default(key: str, default: bool) -> bool:
         return default
     return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
 
-def resolve_bot_token() -> str:
-    token = os.getenv('TG_BOT_TOKEN', '').strip() or os.getenv('BOT_TOKEN', '').strip()
-    if not token:
-        raise RuntimeError(
-            'TG_BOT_TOKEN is not set. Configure TG_BOT_TOKEN in environment variables or .env file.'
-        )
-    if ':' not in token:
-        raise RuntimeError('TG_BOT_TOKEN has invalid format. Expected token like "123456:ABC..."')
-    return token
-
-
-API_TOKEN = resolve_bot_token()
+API_TOKEN = '8436518410:AAFF9AG58xsr1iWsidkD9yoDEqAKfgaAHkY'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ADMIN_IDS: Set[int] = set(
     int(value.strip())
@@ -139,10 +129,6 @@ FUNPAY_LOT_MAP = os.getenv('FUNPAY_LOT_MAP', '').strip()
 FUNPAY_GOLDEN_KEY = os.getenv('FUNPAY_GOLDEN_KEY', '').strip()
 FUNPAY_LISTEN_DELAY = env_int_or_default('FUNPAY_LISTEN_DELAY', 4)
 FUNPAY_MATCH_BY_AMOUNT = env_or_default('FUNPAY_MATCH_BY_AMOUNT', '1').lower() in {'1', 'true', 'yes', 'on'}
-TOPUP_PROVIDER = env_or_default('TOPUP_PROVIDER', 'funpay').lower().strip()
-LOLZ_PAYMENT_URL = env_or_default('LOLZ_PAYMENT_URL', 'https://lolz.live/')
-LOLZ_TOPUP_LOT_URL = env_or_default('LOLZ_TOPUP_LOT_URL', '')
-LOLZ_LOT_MAP = os.getenv('LOLZ_LOT_MAP', '').strip()
 PURCHASE_CASHBACK_PERCENT = env_float_or_default('PURCHASE_CASHBACK_PERCENT', 2.0)
 DAILY_BONUS_AMOUNT = env_float_or_default('DAILY_BONUS_AMOUNT', 5.0)
 DAILY_BONUS_COOLDOWN_HOURS = env_int_or_default('DAILY_BONUS_COOLDOWN_HOURS', 24)
@@ -162,44 +148,44 @@ EMAIL_CATEGORY_PHOTO_URL = os.getenv('EMAIL_CATEGORY_PHOTO_URL', MAIN_MENU_PHOTO
 REVIEWS_PHOTO_URL_1 = os.getenv('REVIEWS_PHOTO_URL_1', 'https://i.postimg.cc/DfMRsXp7/a33681df3b4a34e1706da52d4484ab7e.jpg')
 REVIEWS_PHOTO_URL_2 = os.getenv('REVIEWS_PHOTO_URL_2', 'https://i.postimg.cc/wMyfFw4J/EB328F27-0B7A-4338-A923-2BF9D774A300.png')
 AGREEMENT_TEXT = (
-    'Пользовательское соглашение\n\n'
-    '1) Общие положения\n'
-    '1.1. Используя бота, пользователь подтверждает, что ознакомился с условиями и полностью их принимает.\n'
-    '1.2. Все товары и услуги в боте являются цифровыми и предоставляются в электронном виде.\n'
-    '1.3. Факт оплаты (товара или пополнения) автоматически означает акцепт настоящего соглашения без дополнительных подтверждений.\n\n'
-    '2) Личная ответственность пользователя\n'
-    '2.1. Пользователь несет полную и персональную ответственность за выбор товара, ввод реквизитов, комментариев и кода оплаты.\n'
-    '2.2. Пользователь самостоятельно несет ответственность за дальнейшее использование полученных данных (аккаунты, прокси, почты, коды и иные цифровые данные).\n'
-    '2.3. Пользователь самостоятельно отвечает за соблюдение правил сторонних сервисов, платформ, игр, мессенджеров и применимого законодательства.\n'
-    '2.4. Все риски, связанные с блокировками, ограничениями, санкциями, изменением правил сторонних сервисов, пользователь принимает на себя.\n'
-    '2.5. Передача полученных данных третьим лицам, разглашение, утрата доступа, компрометация по вине пользователя не относится к зоне ответственности магазина.\n\n'
-    '3) Оплата, пополнение и баланс\n'
-    '3.1. Баланс бота является внутренней расчетной единицей сервиса и используется только для оплаты внутри бота.\n'
-    '3.2. Пополнение засчитывается только после подтверждения платежа системой/провайдером или администратором.\n'
-    '3.3. При оплате пользователь обязан указывать корректный код платежа (если он требуется в инструкции).\n'
-    '3.4. Ошибки в сумме, комментарии или реквизитах, допущенные пользователем, могут привести к задержке/отказу в зачислении и рассматриваются индивидуально.\n'
-    '3.5. Администрация вправе запросить подтверждение оплаты при спорных ситуациях (чек, номер заказа, скриншот и т.д.).\n\n'
-    '4) Выдача цифрового товара\n'
-    '4.1. Товар считается выданным надлежащим образом с момента отображения данных в чате бота или в истории заказа.\n'
-    '4.2. Пользователь обязан сразу проверить полученные данные после выдачи.\n'
-    '4.3. Претензии по товару принимаются при наличии объективных подтверждений и в разумный срок после покупки.\n\n'
-    '5) Возвраты и отмены\n'
-    '5.1. Возврат возможен только если товар не был выдан по вине магазина или подтверждена техническая ошибка на стороне сервиса.\n'
-    '5.2. Если товар выдан, но не подошел по личным причинам пользователя, возврат не производится.\n'
-    '5.3. Возврат не производится при нарушении пользователем инструкции, правил использования товара или условий сторонних платформ.\n\n'
-    '6) Ограничения и право отказа\n'
-    '6.1. Администрация вправе отказать в обслуживании при подозрении на мошенничество, злоупотребление, попытки взлома, спам или иные недобросовестные действия.\n'
-    '6.2. Администрация вправе временно ограничить функциональность бота при технических работах, форс-мажорах и изменениях у платежных/сторонних сервисов.\n\n'
-    '7) Заключительные положения\n'
-    '7.1. Условия соглашения могут быть изменены без предварительного персонального уведомления.\n'
-    '7.2. Актуальная редакция соглашения публикуется в боте и вступает в силу с момента публикации.\n'
-    '7.3. Продолжение использования бота после публикации изменений означает полное согласие пользователя с обновленными условиями.'
+    '╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М╤Б╨║╨╛╨╡ ╤Б╨╛╨│╨╗╨░╤И╨╡╨╜╨╕╨╡\n\n'
+    '1) ╨Ю╨▒╤Й╨╕╨╡ ╨┐╨╛╨╗╨╛╨╢╨╡╨╜╨╕╤П\n'
+    '1.1. ╨Ш╤Б╨┐╨╛╨╗╤М╨╖╤Г╤П ╨▒╨╛╤В╨░, ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨░╨╡╤В, ╤З╤В╨╛ ╨╛╨╖╨╜╨░╨║╨╛╨╝╨╕╨╗╤Б╤П ╤Б ╤Г╤Б╨╗╨╛╨▓╨╕╤П╨╝╨╕ ╨╕ ╨┐╨╛╨╗╨╜╨╛╤Б╤В╤М╤О ╨╕╤Е ╨┐╤А╨╕╨╜╨╕╨╝╨░╨╡╤В.\n'
+    '1.2. ╨Т╤Б╨╡ ╤В╨╛╨▓╨░╤А╤Л ╨╕ ╤Г╤Б╨╗╤Г╨│╨╕ ╨▓ ╨▒╨╛╤В╨╡ ╤П╨▓╨╗╤П╤О╤В╤Б╤П ╤Ж╨╕╤Д╤А╨╛╨▓╤Л╨╝╨╕ ╨╕ ╨┐╤А╨╡╨┤╨╛╤Б╤В╨░╨▓╨╗╤П╤О╤В╤Б╤П ╨▓ ╤Н╨╗╨╡╨║╤В╤А╨╛╨╜╨╜╨╛╨╝ ╨▓╨╕╨┤╨╡.\n'
+    '1.3. ╨д╨░╨║╤В ╨╛╨┐╨╗╨░╤В╤Л (╤В╨╛╨▓╨░╤А╨░ ╨╕╨╗╨╕ ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П) ╨░╨▓╤В╨╛╨╝╨░╤В╨╕╤З╨╡╤Б╨║╨╕ ╨╛╨╖╨╜╨░╤З╨░╨╡╤В ╨░╨║╤Ж╨╡╨┐╤В ╨╜╨░╤Б╤В╨╛╤П╤Й╨╡╨│╨╛ ╤Б╨╛╨│╨╗╨░╤И╨╡╨╜╨╕╤П ╨▒╨╡╨╖ ╨┤╨╛╨┐╨╛╨╗╨╜╨╕╤В╨╡╨╗╤М╨╜╤Л╤Е ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╣.\n\n'
+    '2) ╨Ы╨╕╤З╨╜╨░╤П ╨╛╤В╨▓╨╡╤В╤Б╤В╨▓╨╡╨╜╨╜╨╛╤Б╤В╤М ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П\n'
+    '2.1. ╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨╜╨╡╤Б╨╡╤В ╨┐╨╛╨╗╨╜╤Г╤О ╨╕ ╨┐╨╡╤А╤Б╨╛╨╜╨░╨╗╤М╨╜╤Г╤О ╨╛╤В╨▓╨╡╤В╤Б╤В╨▓╨╡╨╜╨╜╨╛╤Б╤В╤М ╨╖╨░ ╨▓╤Л╨▒╨╛╤А ╤В╨╛╨▓╨░╤А╨░, ╨▓╨▓╨╛╨┤ ╤А╨╡╨║╨▓╨╕╨╖╨╕╤В╨╛╨▓, ╨║╨╛╨╝╨╝╨╡╨╜╤В╨░╤А╨╕╨╡╨▓ ╨╕ ╨║╨╛╨┤╨░ ╨╛╨┐╨╗╨░╤В╤Л.\n'
+    '2.2. ╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╤Б╨░╨╝╨╛╤Б╤В╨╛╤П╤В╨╡╨╗╤М╨╜╨╛ ╨╜╨╡╤Б╨╡╤В ╨╛╤В╨▓╨╡╤В╤Б╤В╨▓╨╡╨╜╨╜╨╛╤Б╤В╤М ╨╖╨░ ╨┤╨░╨╗╤М╨╜╨╡╨╣╤И╨╡╨╡ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╨╡ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╜╤Л╤Е ╨┤╨░╨╜╨╜╤Л╤Е (╨░╨║╨║╨░╤Г╨╜╤В╤Л, ╨┐╤А╨╛╨║╤Б╨╕, ╨┐╨╛╤З╤В╤Л, ╨║╨╛╨┤╤Л ╨╕ ╨╕╨╜╤Л╨╡ ╤Ж╨╕╤Д╤А╨╛╨▓╤Л╨╡ ╨┤╨░╨╜╨╜╤Л╨╡).\n'
+    '2.3. ╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╤Б╨░╨╝╨╛╤Б╤В╨╛╤П╤В╨╡╨╗╤М╨╜╨╛ ╨╛╤В╨▓╨╡╤З╨░╨╡╤В ╨╖╨░ ╤Б╨╛╨▒╨╗╤О╨┤╨╡╨╜╨╕╨╡ ╨┐╤А╨░╨▓╨╕╨╗ ╤Б╤В╨╛╤А╨╛╨╜╨╜╨╕╤Е ╤Б╨╡╤А╨▓╨╕╤Б╨╛╨▓, ╨┐╨╗╨░╤В╤Д╨╛╤А╨╝, ╨╕╨│╤А, ╨╝╨╡╤Б╤Б╨╡╨╜╨┤╨╢╨╡╤А╨╛╨▓ ╨╕ ╨┐╤А╨╕╨╝╨╡╨╜╨╕╨╝╨╛╨│╨╛ ╨╖╨░╨║╨╛╨╜╨╛╨┤╨░╤В╨╡╨╗╤М╤Б╤В╨▓╨░.\n'
+    '2.4. ╨Т╤Б╨╡ ╤А╨╕╤Б╨║╨╕, ╤Б╨▓╤П╨╖╨░╨╜╨╜╤Л╨╡ ╤Б ╨▒╨╗╨╛╨║╨╕╤А╨╛╨▓╨║╨░╨╝╨╕, ╨╛╨│╤А╨░╨╜╨╕╤З╨╡╨╜╨╕╤П╨╝╨╕, ╤Б╨░╨╜╨║╤Ж╨╕╤П╨╝╨╕, ╨╕╨╖╨╝╨╡╨╜╨╡╨╜╨╕╨╡╨╝ ╨┐╤А╨░╨▓╨╕╨╗ ╤Б╤В╨╛╤А╨╛╨╜╨╜╨╕╤Е ╤Б╨╡╤А╨▓╨╕╤Б╨╛╨▓, ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨┐╤А╨╕╨╜╨╕╨╝╨░╨╡╤В ╨╜╨░ ╤Б╨╡╨▒╤П.\n'
+    '2.5. ╨Я╨╡╤А╨╡╨┤╨░╤З╨░ ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╜╤Л╤Е ╨┤╨░╨╜╨╜╤Л╤Е ╤В╤А╨╡╤В╤М╨╕╨╝ ╨╗╨╕╤Ж╨░╨╝, ╤А╨░╨╖╨│╨╗╨░╤И╨╡╨╜╨╕╨╡, ╤Г╤В╤А╨░╤В╨░ ╨┤╨╛╤Б╤В╤Г╨┐╨░, ╨║╨╛╨╝╨┐╤А╨╛╨╝╨╡╤В╨░╤Ж╨╕╤П ╨┐╨╛ ╨▓╨╕╨╜╨╡ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П ╨╜╨╡ ╨╛╤В╨╜╨╛╤Б╨╕╤В╤Б╤П ╨║ ╨╖╨╛╨╜╨╡ ╨╛╤В╨▓╨╡╤В╤Б╤В╨▓╨╡╨╜╨╜╨╛╤Б╤В╨╕ ╨╝╨░╨│╨░╨╖╨╕╨╜╨░.\n\n'
+    '3) ╨Ю╨┐╨╗╨░╤В╨░, ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ ╨╕ ╨▒╨░╨╗╨░╨╜╤Б\n'
+    '3.1. ╨С╨░╨╗╨░╨╜╤Б ╨▒╨╛╤В╨░ ╤П╨▓╨╗╤П╨╡╤В╤Б╤П ╨▓╨╜╤Г╤В╤А╨╡╨╜╨╜╨╡╨╣ ╤А╨░╤Б╤З╨╡╤В╨╜╨╛╨╣ ╨╡╨┤╨╕╨╜╨╕╤Ж╨╡╨╣ ╤Б╨╡╤А╨▓╨╕╤Б╨░ ╨╕ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╤В╤Б╤П ╤В╨╛╨╗╤М╨║╨╛ ╨┤╨╗╤П ╨╛╨┐╨╗╨░╤В╤Л ╨▓╨╜╤Г╤В╤А╨╕ ╨▒╨╛╤В╨░.\n'
+    '3.2. ╨Я╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ ╨╖╨░╤Б╤З╨╕╤В╤Л╨▓╨░╨╡╤В╤Б╤П ╤В╨╛╨╗╤М╨║╨╛ ╨┐╨╛╤Б╨╗╨╡ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╤П ╨┐╨╗╨░╤В╨╡╨╢╨░ ╤Б╨╕╤Б╤В╨╡╨╝╨╛╨╣/╨┐╤А╨╛╨▓╨░╨╣╨┤╨╡╤А╨╛╨╝ ╨╕╨╗╨╕ ╨░╨┤╨╝╨╕╨╜╨╕╤Б╤В╤А╨░╤В╨╛╤А╨╛╨╝.\n'
+    '3.3. ╨Я╤А╨╕ ╨╛╨┐╨╗╨░╤В╨╡ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨╛╨▒╤П╨╖╨░╨╜ ╤Г╨║╨░╨╖╤Л╨▓╨░╤В╤М ╨║╨╛╤А╤А╨╡╨║╤В╨╜╤Л╨╣ ╨║╨╛╨┤ ╨┐╨╗╨░╤В╨╡╨╢╨░ (╨╡╤Б╨╗╨╕ ╨╛╨╜ ╤В╤А╨╡╨▒╤Г╨╡╤В╤Б╤П ╨▓ ╨╕╨╜╤Б╤В╤А╤Г╨║╤Ж╨╕╨╕).\n'
+    '3.4. ╨Ю╤И╨╕╨▒╨║╨╕ ╨▓ ╤Б╤Г╨╝╨╝╨╡, ╨║╨╛╨╝╨╝╨╡╨╜╤В╨░╤А╨╕╨╕ ╨╕╨╗╨╕ ╤А╨╡╨║╨▓╨╕╨╖╨╕╤В╨░╤Е, ╨┤╨╛╨┐╤Г╤Й╨╡╨╜╨╜╤Л╨╡ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╝, ╨╝╨╛╨│╤Г╤В ╨┐╤А╨╕╨▓╨╡╤Б╤В╨╕ ╨║ ╨╖╨░╨┤╨╡╤А╨╢╨║╨╡/╨╛╤В╨║╨░╨╖╤Г ╨▓ ╨╖╨░╤З╨╕╤Б╨╗╨╡╨╜╨╕╨╕ ╨╕ ╤А╨░╤Б╤Б╨╝╨░╤В╤А╨╕╨▓╨░╤О╤В╤Б╤П ╨╕╨╜╨┤╨╕╨▓╨╕╨┤╤Г╨░╨╗╤М╨╜╨╛.\n'
+    '3.5. ╨Р╨┤╨╝╨╕╨╜╨╕╤Б╤В╤А╨░╤Ж╨╕╤П ╨▓╨┐╤А╨░╨▓╨╡ ╨╖╨░╨┐╤А╨╛╤Б╨╕╤В╤М ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╡ ╨╛╨┐╨╗╨░╤В╤Л ╨┐╤А╨╕ ╤Б╨┐╨╛╤А╨╜╤Л╤Е ╤Б╨╕╤В╤Г╨░╤Ж╨╕╤П╤Е (╤З╨╡╨║, ╨╜╨╛╨╝╨╡╤А ╨╖╨░╨║╨░╨╖╨░, ╤Б╨║╤А╨╕╨╜╤И╨╛╤В ╨╕ ╤В.╨┤.).\n\n'
+    '4) ╨Т╤Л╨┤╨░╤З╨░ ╤Ж╨╕╤Д╤А╨╛╨▓╨╛╨│╨╛ ╤В╨╛╨▓╨░╤А╨░\n'
+    '4.1. ╨в╨╛╨▓╨░╤А ╤Б╤З╨╕╤В╨░╨╡╤В╤Б╤П ╨▓╤Л╨┤╨░╨╜╨╜╤Л╨╝ ╨╜╨░╨┤╨╗╨╡╨╢╨░╤Й╨╕╨╝ ╨╛╨▒╤А╨░╨╖╨╛╨╝ ╤Б ╨╝╨╛╨╝╨╡╨╜╤В╨░ ╨╛╤В╨╛╨▒╤А╨░╨╢╨╡╨╜╨╕╤П ╨┤╨░╨╜╨╜╤Л╤Е ╨▓ ╤З╨░╤В╨╡ ╨▒╨╛╤В╨░ ╨╕╨╗╨╕ ╨▓ ╨╕╤Б╤В╨╛╤А╨╕╨╕ ╨╖╨░╨║╨░╨╖╨░.\n'
+    '4.2. ╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М ╨╛╨▒╤П╨╖╨░╨╜ ╤Б╤А╨░╨╖╤Г ╨┐╤А╨╛╨▓╨╡╤А╨╕╤В╤М ╨┐╨╛╨╗╤Г╤З╨╡╨╜╨╜╤Л╨╡ ╨┤╨░╨╜╨╜╤Л╨╡ ╨┐╨╛╤Б╨╗╨╡ ╨▓╤Л╨┤╨░╤З╨╕.\n'
+    '4.3. ╨Я╤А╨╡╤В╨╡╨╜╨╖╨╕╨╕ ╨┐╨╛ ╤В╨╛╨▓╨░╤А╤Г ╨┐╤А╨╕╨╜╨╕╨╝╨░╤О╤В╤Б╤П ╨┐╤А╨╕ ╨╜╨░╨╗╨╕╤З╨╕╨╕ ╨╛╨▒╤К╨╡╨║╤В╨╕╨▓╨╜╤Л╤Е ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╣ ╨╕ ╨▓ ╤А╨░╨╖╤Г╨╝╨╜╤Л╨╣ ╤Б╤А╨╛╨║ ╨┐╨╛╤Б╨╗╨╡ ╨┐╨╛╨║╤Г╨┐╨║╨╕.\n\n'
+    '5) ╨Т╨╛╨╖╨▓╤А╨░╤В╤Л ╨╕ ╨╛╤В╨╝╨╡╨╜╤Л\n'
+    '5.1. ╨Т╨╛╨╖╨▓╤А╨░╤В ╨▓╨╛╨╖╨╝╨╛╨╢╨╡╨╜ ╤В╨╛╨╗╤М╨║╨╛ ╨╡╤Б╨╗╨╕ ╤В╨╛╨▓╨░╤А ╨╜╨╡ ╨▒╤Л╨╗ ╨▓╤Л╨┤╨░╨╜ ╨┐╨╛ ╨▓╨╕╨╜╨╡ ╨╝╨░╨│╨░╨╖╨╕╨╜╨░ ╨╕╨╗╨╕ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨░ ╤В╨╡╤Е╨╜╨╕╤З╨╡╤Б╨║╨░╤П ╨╛╤И╨╕╨▒╨║╨░ ╨╜╨░ ╤Б╤В╨╛╤А╨╛╨╜╨╡ ╤Б╨╡╤А╨▓╨╕╤Б╨░.\n'
+    '5.2. ╨Х╤Б╨╗╨╕ ╤В╨╛╨▓╨░╤А ╨▓╤Л╨┤╨░╨╜, ╨╜╨╛ ╨╜╨╡ ╨┐╨╛╨┤╨╛╤И╨╡╨╗ ╨┐╨╛ ╨╗╨╕╤З╨╜╤Л╨╝ ╨┐╤А╨╕╤З╨╕╨╜╨░╨╝ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П, ╨▓╨╛╨╖╨▓╤А╨░╤В ╨╜╨╡ ╨┐╤А╨╛╨╕╨╖╨▓╨╛╨┤╨╕╤В╤Б╤П.\n'
+    '5.3. ╨Т╨╛╨╖╨▓╤А╨░╤В ╨╜╨╡ ╨┐╤А╨╛╨╕╨╖╨▓╨╛╨┤╨╕╤В╤Б╤П ╨┐╤А╨╕ ╨╜╨░╤А╤Г╤И╨╡╨╜╨╕╨╕ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╨╡╨╝ ╨╕╨╜╤Б╤В╤А╤Г╨║╤Ж╨╕╨╕, ╨┐╤А╨░╨▓╨╕╨╗ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╤П ╤В╨╛╨▓╨░╤А╨░ ╨╕╨╗╨╕ ╤Г╤Б╨╗╨╛╨▓╨╕╨╣ ╤Б╤В╨╛╤А╨╛╨╜╨╜╨╕╤Е ╨┐╨╗╨░╤В╤Д╨╛╤А╨╝.\n\n'
+    '6) ╨Ю╨│╤А╨░╨╜╨╕╤З╨╡╨╜╨╕╤П ╨╕ ╨┐╤А╨░╨▓╨╛ ╨╛╤В╨║╨░╨╖╨░\n'
+    '6.1. ╨Р╨┤╨╝╨╕╨╜╨╕╤Б╤В╤А╨░╤Ж╨╕╤П ╨▓╨┐╤А╨░╨▓╨╡ ╨╛╤В╨║╨░╨╖╨░╤В╤М ╨▓ ╨╛╨▒╤Б╨╗╤Г╨╢╨╕╨▓╨░╨╜╨╕╨╕ ╨┐╤А╨╕ ╨┐╨╛╨┤╨╛╨╖╤А╨╡╨╜╨╕╨╕ ╨╜╨░ ╨╝╨╛╤И╨╡╨╜╨╜╨╕╤З╨╡╤Б╤В╨▓╨╛, ╨╖╨╗╨╛╤Г╨┐╨╛╤В╤А╨╡╨▒╨╗╨╡╨╜╨╕╨╡, ╨┐╨╛╨┐╤Л╤В╨║╨╕ ╨▓╨╖╨╗╨╛╨╝╨░, ╤Б╨┐╨░╨╝ ╨╕╨╗╨╕ ╨╕╨╜╤Л╨╡ ╨╜╨╡╨┤╨╛╨▒╤А╨╛╤Б╨╛╨▓╨╡╤Б╤В╨╜╤Л╨╡ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╤П.\n'
+    '6.2. ╨Р╨┤╨╝╨╕╨╜╨╕╤Б╤В╤А╨░╤Ж╨╕╤П ╨▓╨┐╤А╨░╨▓╨╡ ╨▓╤А╨╡╨╝╨╡╨╜╨╜╨╛ ╨╛╨│╤А╨░╨╜╨╕╤З╨╕╤В╤М ╤Д╤Г╨╜╨║╤Ж╨╕╨╛╨╜╨░╨╗╤М╨╜╨╛╤Б╤В╤М ╨▒╨╛╤В╨░ ╨┐╤А╨╕ ╤В╨╡╤Е╨╜╨╕╤З╨╡╤Б╨║╨╕╤Е ╤А╨░╨▒╨╛╤В╨░╤Е, ╤Д╨╛╤А╤Б-╨╝╨░╨╢╨╛╤А╨░╤Е ╨╕ ╨╕╨╖╨╝╨╡╨╜╨╡╨╜╨╕╤П╤Е ╤Г ╨┐╨╗╨░╤В╨╡╨╢╨╜╤Л╤Е/╤Б╤В╨╛╤А╨╛╨╜╨╜╨╕╤Е ╤Б╨╡╤А╨▓╨╕╤Б╨╛╨▓.\n\n'
+    '7) ╨Ч╨░╨║╨╗╤О╤З╨╕╤В╨╡╨╗╤М╨╜╤Л╨╡ ╨┐╨╛╨╗╨╛╨╢╨╡╨╜╨╕╤П\n'
+    '7.1. ╨г╤Б╨╗╨╛╨▓╨╕╤П ╤Б╨╛╨│╨╗╨░╤И╨╡╨╜╨╕╤П ╨╝╨╛╨│╤Г╤В ╨▒╤Л╤В╤М ╨╕╨╖╨╝╨╡╨╜╨╡╨╜╤Л ╨▒╨╡╨╖ ╨┐╤А╨╡╨┤╨▓╨░╤А╨╕╤В╨╡╨╗╤М╨╜╨╛╨│╨╛ ╨┐╨╡╤А╤Б╨╛╨╜╨░╨╗╤М╨╜╨╛╨│╨╛ ╤Г╨▓╨╡╨┤╨╛╨╝╨╗╨╡╨╜╨╕╤П.\n'
+    '7.2. ╨Р╨║╤В╤Г╨░╨╗╤М╨╜╨░╤П ╤А╨╡╨┤╨░╨║╤Ж╨╕╤П ╤Б╨╛╨│╨╗╨░╤И╨╡╨╜╨╕╤П ╨┐╤Г╨▒╨╗╨╕╨║╤Г╨╡╤В╤Б╤П ╨▓ ╨▒╨╛╤В╨╡ ╨╕ ╨▓╤Б╤В╤Г╨┐╨░╨╡╤В ╨▓ ╤Б╨╕╨╗╤Г ╤Б ╨╝╨╛╨╝╨╡╨╜╤В╨░ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕.\n'
+    '7.3. ╨Я╤А╨╛╨┤╨╛╨╗╨╢╨╡╨╜╨╕╨╡ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╤П ╨▒╨╛╤В╨░ ╨┐╨╛╤Б╨╗╨╡ ╨┐╤Г╨▒╨╗╨╕╨║╨░╤Ж╨╕╨╕ ╨╕╨╖╨╝╨╡╨╜╨╡╨╜╨╕╨╣ ╨╛╨╖╨╜╨░╤З╨░╨╡╤В ╨┐╨╛╨╗╨╜╨╛╨╡ ╤Б╨╛╨│╨╗╨░╤Б╨╕╨╡ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П ╤Б ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╜╤Л╨╝╨╕ ╤Г╤Б╨╗╨╛╨▓╨╕╤П╨╝╨╕.'
 )
 
 CATEGORY_NAMES = {
-    'proxy': '🌐 Прокси',
-    'tg': '🤖 TG аккаунты',
-    'email': '✉️ Почты',
+    'proxy': 'ЁЯМР ╨Я╤А╨╛╨║╤Б╨╕',
+    'tg': 'ЁЯдЦ TG ╨░╨║╨║╨░╤Г╨╜╤В╤Л',
+    'email': 'тЬЙя╕П ╨Я╨╛╤З╤В╤Л',
 }
 PRODUCTS_PAGE_SIZE = 5
 
@@ -222,8 +208,6 @@ topup_marker_re = re.compile(r'topup_(\d+)_(\d+)', re.IGNORECASE)
 
 
 def payment_provider_label() -> str:
-    if TOPUP_PROVIDER == 'lolz':
-        return 'Lolz'
     return 'FunPay'
 
 
@@ -324,17 +308,6 @@ def create_funpay_payment(amount: float, user_id: int, topup_id: int) -> tuple[s
     return lot_url, f'fp_{topup_id}'
 
 
-def create_lolz_payment(amount: float, user_id: int, topup_id: int) -> tuple[str, str]:
-    lot_url = resolve_lolz_lot_url(amount)
-    return lot_url, f'lz_{topup_id}'
-
-
-def create_topup_payment(amount: float, user_id: int, topup_id: int) -> tuple[str, str]:
-    if TOPUP_PROVIDER == 'lolz':
-        return create_lolz_payment(amount, user_id, topup_id)
-    return create_funpay_payment(amount, user_id, topup_id)
-
-
 def resolve_funpay_lot_url(amount: float) -> str:
     amount_key = f'{float(amount):.2f}'
 
@@ -363,34 +336,6 @@ def resolve_funpay_lot_url(amount: float) -> str:
     return 'https://funpay.com/'
 
 
-def resolve_lolz_lot_url(amount: float) -> str:
-    amount_key = f'{float(amount):.2f}'
-
-    if LOLZ_LOT_MAP:
-        for part in LOLZ_LOT_MAP.split(';'):
-            item = part.strip()
-            if not item or '=' not in item:
-                continue
-            left, right = item.split('=', 1)
-            raw_amount = left.strip().replace(',', '.')
-            url = right.strip()
-            if not url:
-                continue
-            try:
-                if f'{float(raw_amount):.2f}' == amount_key and url.startswith('http'):
-                    return url
-            except Exception:
-                continue
-
-    lot_url = LOLZ_TOPUP_LOT_URL if LOLZ_TOPUP_LOT_URL.startswith('http') else ''
-    if lot_url:
-        return lot_url
-
-    if LOLZ_PAYMENT_URL.startswith('http'):
-        return LOLZ_PAYMENT_URL
-    return 'https://lolz.live/'
-
-
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
@@ -398,48 +343,48 @@ def is_admin(user_id: int) -> bool:
 def main_menu_kb(user_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton('📦 Категории', callback_data='menu:catalog'),
-        InlineKeyboardButton('👤 Профиль', callback_data='menu:profile'),
+        InlineKeyboardButton('ЁЯУж ╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╨╕', callback_data='menu:catalog'),
+        InlineKeyboardButton('ЁЯСд ╨Я╤А╨╛╤Д╨╕╨╗╤М', callback_data='menu:profile'),
     )
     kb.add(
-        InlineKeyboardButton('📄 Пользовательское соглашение', callback_data='menu:agreement'),
-        InlineKeyboardButton('💳 Пополнить баланс', callback_data='menu:topup'),
+        InlineKeyboardButton('ЁЯУД ╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М╤Б╨║╨╛╨╡ ╤Б╨╛╨│╨╗╨░╤И╨╡╨╜╨╕╨╡', callback_data='menu:agreement'),
+        InlineKeyboardButton('ЁЯТ│ ╨Я╨╛╨┐╨╛╨╗╨╜╨╕╤В╤М ╨▒╨░╨╗╨░╨╜╤Б', callback_data='menu:topup'),
     )
     kb.add(
-        InlineKeyboardButton('⭐ Отзывы', callback_data='menu:reviews'),
-        InlineKeyboardButton('📣 Канал', callback_data='menu:channel'),
+        InlineKeyboardButton('тнР ╨Ю╤В╨╖╤Л╨▓╤Л', callback_data='menu:reviews'),
+        InlineKeyboardButton('ЁЯУг ╨Ъ╨░╨╜╨░╨╗', callback_data='menu:channel'),
     )
     if is_admin(user_id):
-        kb.add(InlineKeyboardButton('🛠 Админ панель', callback_data='menu:adminpanel'))
+        kb.add(InlineKeyboardButton('ЁЯЫа ╨Р╨┤╨╝╨╕╨╜ ╨┐╨░╨╜╨╡╨╗╤М', callback_data='menu:adminpanel'))
     return kb
 
 
 def back_to_main_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup().add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    return InlineKeyboardMarkup().add(InlineKeyboardButton('ЁЯФЩ ╨Э╨░╨╖╨░╨┤', callback_data='menu:main'))
 
 
 def user_get_code_kb(order_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('🔐 Получить код для входа', callback_data=f'userreqcode:{order_id}'))
-    kb.add(InlineKeyboardButton('⭐ Оставить отзыв', callback_data='menu:reviews'))
-    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    kb.add(InlineKeyboardButton('ЁЯФР ╨Я╨╛╨╗╤Г╤З╨╕╤В╤М ╨║╨╛╨┤ ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░', callback_data=f'userreqcode:{order_id}'))
+    kb.add(InlineKeyboardButton('тнР ╨Ю╤Б╤В╨░╨▓╨╕╤В╤М ╨╛╤В╨╖╤Л╨▓', callback_data='menu:reviews'))
+    kb.add(InlineKeyboardButton('ЁЯФЩ ╨Э╨░╨╖╨░╨┤', callback_data='menu:main'))
     return kb
 
 
 def admin_get_code_kb(order_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup().add(
-        InlineKeyboardButton('🔐 Получить код', callback_data=f'admsendcode:{order_id}')
+        InlineKeyboardButton('ЁЯФР ╨Я╨╛╨╗╤Г╤З╨╕╤В╤М ╨║╨╛╨┤', callback_data=f'admsendcode:{order_id}')
     )
 
 
 def profile_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('📊 Центр уведомлений', callback_data='profile:hub'))
-    kb.add(InlineKeyboardButton('🧾 История покупок', callback_data='profile:orders'))
-    kb.add(InlineKeyboardButton('💸 История пополнений', callback_data='profile:topups'))
-    kb.add(InlineKeyboardButton('🎯 Ежедневный бонус', callback_data='profile:dailybonus'))
-    kb.add(InlineKeyboardButton('🎁 Активировать промо', callback_data='profile:promo'))
-    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    kb.add(InlineKeyboardButton('ЁЯУК ╨ж╨╡╨╜╤В╤А ╤Г╨▓╨╡╨┤╨╛╨╝╨╗╨╡╨╜╨╕╨╣', callback_data='profile:hub'))
+    kb.add(InlineKeyboardButton('ЁЯз╛ ╨Ш╤Б╤В╨╛╤А╨╕╤П ╨┐╨╛╨║╤Г╨┐╨╛╨║', callback_data='profile:orders'))
+    kb.add(InlineKeyboardButton('ЁЯТ╕ ╨Ш╤Б╤В╨╛╤А╨╕╤П ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╣', callback_data='profile:topups'))
+    kb.add(InlineKeyboardButton('ЁЯОп ╨Х╨╢╨╡╨┤╨╜╨╡╨▓╨╜╤Л╨╣ ╨▒╨╛╨╜╤Г╤Б', callback_data='profile:dailybonus'))
+    kb.add(InlineKeyboardButton('ЁЯОБ ╨Р╨║╤В╨╕╨▓╨╕╤А╨╛╨▓╨░╤В╤М ╨┐╤А╨╛╨╝╨╛', callback_data='profile:promo'))
+    kb.add(InlineKeyboardButton('ЁЯФЩ ╨Э╨░╨╖╨░╨┤', callback_data='menu:main'))
     return kb
 
 
@@ -447,30 +392,30 @@ def build_profile_hub_text(user_id: int) -> str:
     balance = get_balance(user_id)
     bonus_left = get_daily_bonus_remaining_seconds(user_id, cooldown_hours=DAILY_BONUS_COOLDOWN_HOURS)
     if bonus_left <= 0:
-        bonus_text = 'доступен сейчас ✅'
+        bonus_text = '╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╤Б╨╡╨╣╤З╨░╤Б тЬЕ'
     else:
         hours_left = bonus_left // 3600
         minutes_left = (bonus_left % 3600) // 60
-        bonus_text = f'через {hours_left} ч {minutes_left} мин'
+        bonus_text = f'╤З╨╡╤А╨╡╨╖ {hours_left} ╤З {minutes_left} ╨╝╨╕╨╜'
 
     rows = list_user_orders(user_id, limit=3)
     if rows:
         last_orders = []
         for order_id, title, qty, total, status, _, _ in rows:
-            safe_title = html.escape((title or 'Товар').strip())
+            safe_title = html.escape((title or '╨в╨╛╨▓╨░╤А').strip())
             safe_status = html.escape(str(status or 'unknown'))
-            last_orders.append(f'#{order_id} {safe_title} x{qty} | {total:.2f} ₽ | {safe_status}')
+            last_orders.append(f'#{order_id} {safe_title} x{qty} | {total:.2f} тВ╜ | {safe_status}')
         orders_text = '\n'.join(last_orders)
     else:
-        orders_text = 'Покупок пока нет.'
+        orders_text = '╨Я╨╛╨║╤Г╨┐╨╛╨║ ╨┐╨╛╨║╨░ ╨╜╨╡╤В.'
 
     return (
-        '📊 Центр уведомлений\n\n'
+        'ЁЯУК ╨ж╨╡╨╜╤В╤А ╤Г╨▓╨╡╨┤╨╛╨╝╨╗╨╡╨╜╨╕╨╣\n\n'
         f'ID: <code>{user_id}</code>\n'
-        f'Баланс: <b>{balance:.2f} ₽</b>\n'
-        f'Кешбэк: <b>{PURCHASE_CASHBACK_PERCENT:.2f}%</b>\n'
-        f'Ежедневный бонус: <b>{bonus_text}</b>\n\n'
-        'Последние покупки:\n'
+        f'╨С╨░╨╗╨░╨╜╤Б: <b>{balance:.2f} тВ╜</b>\n'
+        f'╨Ъ╨╡╤И╨▒╤Н╨║: <b>{PURCHASE_CASHBACK_PERCENT:.2f}%</b>\n'
+        f'╨Х╨╢╨╡╨┤╨╜╨╡╨▓╨╜╤Л╨╣ ╨▒╨╛╨╜╤Г╤Б: <b>{bonus_text}</b>\n\n'
+        '╨Я╨╛╤Б╨╗╨╡╨┤╨╜╨╕╨╡ ╨┐╨╛╨║╤Г╨┐╨║╨╕:\n'
         f'{orders_text}'
     )
 
@@ -480,7 +425,7 @@ def catalog_kb() -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton(CATEGORY_NAMES['proxy'], callback_data='cat:proxy'))
     kb.add(InlineKeyboardButton(CATEGORY_NAMES['tg'], callback_data='cat:tg'))
     kb.add(InlineKeyboardButton(CATEGORY_NAMES['email'], callback_data='cat:email'))
-    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    kb.add(InlineKeyboardButton('ЁЯФЩ ╨Э╨░╨╖╨░╨┤', callback_data='menu:main'))
     return kb
 
 
@@ -495,20 +440,20 @@ def category_products_kb(category: str, page: int = 0) -> InlineKeyboardMarkup:
     for product_id, title, _, price, stock, _ in page_items:
         kb.add(
             InlineKeyboardButton(
-                f'{title} — {price:.0f} ₽ — {stock} шт.',
+                f'{title} тАФ {price:.0f} тВ╜ тАФ {stock} ╤И╤В.',
                 callback_data=f'buy:{product_id}:{page}',
             )
         )
 
     nav_buttons = []
     if page > 0:
-        nav_buttons.append(InlineKeyboardButton('<< Предыдущая', callback_data=f'catpage:{category}:{page - 1}'))
+        nav_buttons.append(InlineKeyboardButton('<< ╨Я╤А╨╡╨┤╤Л╨┤╤Г╤Й╨░╤П', callback_data=f'catpage:{category}:{page - 1}'))
     if end < total:
-        nav_buttons.append(InlineKeyboardButton('Следующая >>', callback_data=f'catpage:{category}:{page + 1}'))
+        nav_buttons.append(InlineKeyboardButton('╨б╨╗╨╡╨┤╤Г╤О╤Й╨░╤П >>', callback_data=f'catpage:{category}:{page + 1}'))
     if nav_buttons:
         kb.row(*nav_buttons)
 
-    kb.add(InlineKeyboardButton('↩️ Назад', callback_data='menu:catalog'))
+    kb.add(InlineKeyboardButton('тЖйя╕П ╨Э╨░╨╖╨░╨┤', callback_data='menu:catalog'))
     return kb
 
 
@@ -520,10 +465,10 @@ def category_products_text(category: str, page: int = 0) -> str:
     category_title = CATEGORY_NAMES.get(category, category)
     page_label = f'{start + 1}-{end}' if total > 0 else '0-0'
     return (
-        '🛒 Купить товар\n'
-        f'├ Категория: {category_title}\n'
-        '└ Позиция: Не выбрана\n\n'
-        f'📌 Выберите один из предложенных вариантов ({page_label} из {total}):'
+        'ЁЯЫТ ╨Ъ╤Г╨┐╨╕╤В╤М ╤В╨╛╨▓╨░╤А\n'
+        f'тФЬ ╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П: {category_title}\n'
+        'тФФ ╨Я╨╛╨╖╨╕╤Ж╨╕╤П: ╨Э╨╡ ╨▓╤Л╨▒╤А╨░╨╜╨░\n\n'
+        f'ЁЯУМ ╨Т╤Л╨▒╨╡╤А╨╕╤В╨╡ ╨╛╨┤╨╕╨╜ ╨╕╨╖ ╨┐╤А╨╡╨┤╨╗╨╛╨╢╨╡╨╜╨╜╤Л╤Е ╨▓╨░╤А╨╕╨░╨╜╤В╨╛╨▓ ({page_label} ╨╕╨╖ {total}):'
     )
 
 
@@ -532,22 +477,22 @@ def quantity_kb(product_id: int, category: str, max_qty: int, page: int = 0) -> 
     safe_max = min(max_qty, 10) if max_qty > 0 else 1
     for qty in range(1, safe_max + 1):
         kb.insert(InlineKeyboardButton(str(qty), callback_data=f'qty:{product_id}:{qty}'))
-    kb.add(InlineKeyboardButton('✍️ Свое количество', callback_data=f'qtycustom:{product_id}:{page}'))
-    kb.add(InlineKeyboardButton('↩️ Назад', callback_data=f'buy:{product_id}:{page}'))
+    kb.add(InlineKeyboardButton('тЬНя╕П ╨б╨▓╨╛╨╡ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛', callback_data=f'qtycustom:{product_id}:{page}'))
+    kb.add(InlineKeyboardButton('тЖйя╕П ╨Э╨░╨╖╨░╨┤', callback_data=f'buy:{product_id}:{page}'))
     return kb
 
 
 def product_card_text(title: str, category: str, price: float, stock: int, description: str) -> str:
     category_title = CATEGORY_NAMES.get(category, category)
-    format_line = description if description else 'Логин:Пароль'
+    format_line = description if description else '╨Ы╨╛╨│╨╕╨╜:╨Я╨░╤А╨╛╨╗╤М'
     return (
-        '🛒 Купить товар\n'
-        f'├ Категория: {category_title}\n'
-        f'└ Позиция: {title}\n\n'
-        f'├ Стоимость: {price:.2f} ₽\n'
-        f'└ Количество: {stock} шт.\n'
-        '────────────────────\n'
-        f'Формат выдачи: {format_line}'
+        'ЁЯЫТ ╨Ъ╤Г╨┐╨╕╤В╤М ╤В╨╛╨▓╨░╤А\n'
+        f'тФЬ ╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П: {category_title}\n'
+        f'тФФ ╨Я╨╛╨╖╨╕╤Ж╨╕╤П: {title}\n\n'
+        f'тФЬ ╨б╤В╨╛╨╕╨╝╨╛╤Б╤В╤М: {price:.2f} тВ╜\n'
+        f'тФФ ╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛: {stock} ╤И╤В.\n'
+        'тФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФАтФА\n'
+        f'╨д╨╛╤А╨╝╨░╤В ╨▓╤Л╨┤╨░╤З╨╕: {format_line}'
     )
 
 
@@ -566,7 +511,7 @@ def format_delivery_credentials(credentials: str, qty: int) -> str:
             items.append(line)
 
     if not items:
-        return 'Данные отсутствуют. Обратитесь к администратору.'
+        return '╨Ф╨░╨╜╨╜╤Л╨╡ ╨╛╤В╤Б╤Г╤В╤Б╤В╨▓╤Г╤О╤В. ╨Ю╨▒╤А╨░╤В╨╕╤В╨╡╤Б╤М ╨║ ╨░╨┤╨╝╨╕╨╜╨╕╤Б╤В╤А╨░╤В╨╛╤А╤Г.'
 
     if len(items) >= qty:
         selected = items[:qty]
@@ -579,26 +524,26 @@ def format_delivery_credentials(credentials: str, qty: int) -> str:
 def topup_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton('50₽', callback_data='topup:50'),
-        InlineKeyboardButton('100₽', callback_data='topup:100'),
+        InlineKeyboardButton('50тВ╜', callback_data='topup:50'),
+        InlineKeyboardButton('100тВ╜', callback_data='topup:100'),
     )
-    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    kb.add(InlineKeyboardButton('ЁЯФЩ ╨Э╨░╨╖╨░╨┤', callback_data='menu:main'))
     return kb
 
 
 def admin_panel_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('➕ Загрузить товар (мастер)', callback_data='admpanel:add_product'))
-    kb.add(InlineKeyboardButton('💳 Пополнить баланс пользователя', callback_data='admpanel:add_balance'))
-    kb.add(InlineKeyboardButton('✅ Подтвердить пополнение', callback_data='admpanel:confirm_topup'))
-    kb.add(InlineKeyboardButton('🎁 Создать промокод', callback_data='admpanel:create_promo'))
-    kb.add(InlineKeyboardButton('📨 Отправить код по заказу', callback_data='admpanel:send_code'))
-    kb.add(InlineKeyboardButton('📥 Пополнить остаток', callback_data='admpanel:refill'))
-    kb.add(InlineKeyboardButton('🧮 Установить остаток', callback_data='admpanel:set_stock'))
-    kb.add(InlineKeyboardButton('🗑 Удалить товар', callback_data='admpanel:delete_product'))
-    kb.add(InlineKeyboardButton('📋 Список товаров', callback_data='admpanel:list_products'))
-    kb.add(InlineKeyboardButton('❌ Отмена действия', callback_data='admpanel:cancel_any'))
-    kb.add(InlineKeyboardButton('🔙 Главное меню', callback_data='menu:main'))
+    kb.add(InlineKeyboardButton('тЮХ ╨Ч╨░╨│╤А╤Г╨╖╨╕╤В╤М ╤В╨╛╨▓╨░╤А (╨╝╨░╤Б╤В╨╡╤А)', callback_data='admpanel:add_product'))
+    kb.add(InlineKeyboardButton('ЁЯТ│ ╨Я╨╛╨┐╨╛╨╗╨╜╨╕╤В╤М ╨▒╨░╨╗╨░╨╜╤Б ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П', callback_data='admpanel:add_balance'))
+    kb.add(InlineKeyboardButton('тЬЕ ╨Я╨╛╨┤╤В╨▓╨╡╤А╨┤╨╕╤В╤М ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡', callback_data='admpanel:confirm_topup'))
+    kb.add(InlineKeyboardButton('ЁЯОБ ╨б╨╛╨╖╨┤╨░╤В╤М ╨┐╤А╨╛╨╝╨╛╨║╨╛╨┤', callback_data='admpanel:create_promo'))
+    kb.add(InlineKeyboardButton('ЁЯУи ╨Ю╤В╨┐╤А╨░╨▓╨╕╤В╤М ╨║╨╛╨┤ ╨┐╨╛ ╨╖╨░╨║╨░╨╖╤Г', callback_data='admpanel:send_code'))
+    kb.add(InlineKeyboardButton('ЁЯУе ╨Я╨╛╨┐╨╛╨╗╨╜╨╕╤В╤М ╨╛╤Б╤В╨░╤В╨╛╨║', callback_data='admpanel:refill'))
+    kb.add(InlineKeyboardButton('ЁЯзо ╨г╤Б╤В╨░╨╜╨╛╨▓╨╕╤В╤М ╨╛╤Б╤В╨░╤В╨╛╨║', callback_data='admpanel:set_stock'))
+    kb.add(InlineKeyboardButton('ЁЯЧС ╨г╨┤╨░╨╗╨╕╤В╤М ╤В╨╛╨▓╨░╤А', callback_data='admpanel:delete_product'))
+    kb.add(InlineKeyboardButton('ЁЯУЛ ╨б╨┐╨╕╤Б╨╛╨║ ╤В╨╛╨▓╨░╤А╨╛╨▓', callback_data='admpanel:list_products'))
+    kb.add(InlineKeyboardButton('тЭМ ╨Ю╤В╨╝╨╡╨╜╨░ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╤П', callback_data='admpanel:cancel_any'))
+    kb.add(InlineKeyboardButton('ЁЯФЩ ╨У╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О', callback_data='menu:main'))
     return kb
 
 
@@ -607,25 +552,25 @@ def admin_category_kb() -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton(CATEGORY_NAMES['proxy'], callback_data='admaddcat:proxy'))
     kb.add(InlineKeyboardButton(CATEGORY_NAMES['tg'], callback_data='admaddcat:tg'))
     kb.add(InlineKeyboardButton(CATEGORY_NAMES['email'], callback_data='admaddcat:email'))
-    kb.add(InlineKeyboardButton('❌ Отмена', callback_data='admpanel:cancel_add'))
+    kb.add(InlineKeyboardButton('тЭМ ╨Ю╤В╨╝╨╡╨╜╨░', callback_data='admpanel:cancel_add'))
     return kb
 
 
 def admin_auto_restock_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton('✅ Да, автообновление', callback_data='admaddauto:yes'),
-        InlineKeyboardButton('❌ Нет', callback_data='admaddauto:no'),
+        InlineKeyboardButton('тЬЕ ╨Ф╨░, ╨░╨▓╤В╨╛╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╨╡', callback_data='admaddauto:yes'),
+        InlineKeyboardButton('тЭМ ╨Э╨╡╤В', callback_data='admaddauto:no'),
     )
-    kb.add(InlineKeyboardButton('❌ Отмена', callback_data='admpanel:cancel_add'))
+    kb.add(InlineKeyboardButton('тЭМ ╨Ю╤В╨╝╨╡╨╜╨░', callback_data='admpanel:cancel_add'))
     return kb
 
 
 def admin_step_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton('🔙 В админ панель', callback_data='admpanel:home'),
-        InlineKeyboardButton('❌ Отмена', callback_data='admpanel:cancel_any'),
+        InlineKeyboardButton('ЁЯФЩ ╨Т ╨░╨┤╨╝╨╕╨╜ ╨┐╨░╨╜╨╡╨╗╤М', callback_data='admpanel:home'),
+        InlineKeyboardButton('тЭМ ╨Ю╤В╨╝╨╡╨╜╨░', callback_data='admpanel:cancel_any'),
     )
     return kb
 
@@ -633,8 +578,8 @@ def admin_step_kb() -> InlineKeyboardMarkup:
 def admin_confirm_product_kb() -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton('✅ Сохранить товар', callback_data='admaddsave:yes'),
-        InlineKeyboardButton('❌ Отмена', callback_data='admpanel:cancel_add'),
+        InlineKeyboardButton('тЬЕ ╨б╨╛╤Е╤А╨░╨╜╨╕╤В╤М ╤В╨╛╨▓╨░╤А', callback_data='admaddsave:yes'),
+        InlineKeyboardButton('тЭМ ╨Ю╤В╨╝╨╡╨╜╨░', callback_data='admpanel:cancel_add'),
     )
     return kb
 
@@ -647,16 +592,16 @@ async def notify_admins_about_tg_order(
     total: float,
     phone: Optional[str] = None,
 ) -> None:
-    safe_title = html.escape(str(product_title or 'TG аккаунт'))
-    phone_value = html.escape(str(phone).strip()) if phone else 'еще не указан'
+    safe_title = html.escape(str(product_title or 'TG ╨░╨║╨║╨░╤Г╨╜╤В'))
+    phone_value = html.escape(str(phone).strip()) if phone else '╨╡╤Й╨╡ ╨╜╨╡ ╤Г╨║╨░╨╖╨░╨╜'
     text = (
-        '💸 Оплачен TG заказ\n'
-        f'Номер заказа: <b>#{order_id}</b>\n'
-        f'Номер аккаунта (ID): <code>{buyer_user_id}</code>\n'
-        f'Товар: <b>{safe_title}</b>\n'
-        f'Количество: <b>{int(quantity)}</b>\n'
-        f'Сумма: <b>{float(total):.2f} ₽</b>\n'
-        f'Номер для кода: <code>{phone_value}</code>'
+        'ЁЯТ╕ ╨Ю╨┐╨╗╨░╤З╨╡╨╜ TG ╨╖╨░╨║╨░╨╖\n'
+        f'╨Э╨╛╨╝╨╡╤А ╨╖╨░╨║╨░╨╖╨░: <b>#{order_id}</b>\n'
+        f'╨Э╨╛╨╝╨╡╤А ╨░╨║╨║╨░╤Г╨╜╤В╨░ (ID): <code>{buyer_user_id}</code>\n'
+        f'╨в╨╛╨▓╨░╤А: <b>{safe_title}</b>\n'
+        f'╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛: <b>{int(quantity)}</b>\n'
+        f'╨б╤Г╨╝╨╝╨░: <b>{float(total):.2f} тВ╜</b>\n'
+        f'╨Э╨╛╨╝╨╡╤А ╨┤╨╗╤П ╨║╨╛╨┤╨░: <code>{phone_value}</code>'
     )
     for admin_id in ADMIN_IDS:
         try:
@@ -665,7 +610,7 @@ async def notify_admins_about_tg_order(
             pass
 
 
-async def show_main_menu(user_id: int, text: str = 'Главное меню:') -> None:
+async def show_main_menu(user_id: int, text: str = '╨У╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О:') -> None:
     try:
         await bot.send_photo(user_id, photo=MAIN_MENU_PHOTO_URL)
     except Exception:
@@ -749,7 +694,7 @@ async def github_backup_worker() -> None:
 
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
-    await show_main_menu(message.from_user.id, 'Добро пожаловать в магазин цифровых товаров!')
+    await show_main_menu(message.from_user.id, '╨Ф╨╛╨▒╤А╨╛ ╨┐╨╛╨╢╨░╨╗╨╛╨▓╨░╤В╤М ╨▓ ╨╝╨░╨│╨░╨╖╨╕╨╜ ╤Ж╨╕╤Д╤А╨╛╨▓╤Л╤Е ╤В╨╛╨▓╨░╤А╨╛╨▓!')
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('menu:'))
@@ -762,24 +707,24 @@ async def menu_router(cb: types.CallbackQuery):
             await cb.message.delete()
         except Exception:
             pass
-        await show_main_menu(cb.from_user.id, 'Главное меню:')
+        await show_main_menu(cb.from_user.id, '╨У╨╗╨░╨▓╨╜╨╛╨╡ ╨╝╨╡╨╜╤О:')
     elif action == 'adminpanel':
         if not is_admin(cb.from_user.id):
-            await cb.answer('Только админ', show_alert=True)
+            await cb.answer('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜', show_alert=True)
             return
         admin_add_product_state.pop(cb.from_user.id, None)
-        await cb.message.edit_text('Панель админа: выбери действие', reply_markup=admin_panel_kb())
+        await cb.message.edit_text('╨Я╨░╨╜╨╡╨╗╤М ╨░╨┤╨╝╨╕╨╜╨░: ╨▓╤Л╨▒╨╡╤А╨╕ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╨╡', reply_markup=admin_panel_kb())
     elif action == 'catalog':
-        await cb.message.edit_text('Выберите категорию:', reply_markup=catalog_kb())
+        await cb.message.edit_text('╨Т╤Л╨▒╨╡╤А╨╕╤В╨╡ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╤О:', reply_markup=catalog_kb())
     elif action == 'profile':
         await safe_edit_text(cb.message, build_profile_hub_text(cb.from_user.id), reply_markup=profile_kb())
     elif action == 'agreement':
         await cb.message.edit_text(AGREEMENT_TEXT, reply_markup=back_to_main_kb())
     elif action == 'topup':
         await cb.message.edit_text(
-            '⚠️ По вынужденным ситуациям пока доступен только такой способ пополнения.\n'
-            f'Пополнение через {payment_provider_label()}\n'
-            'Доступные суммы: 50₽ и 100₽.',
+            'тЪая╕П ╨Я╨╛ ╨▓╤Л╨╜╤Г╨╢╨┤╨╡╨╜╨╜╤Л╨╝ ╤Б╨╕╤В╤Г╨░╤Ж╨╕╤П╨╝ ╨┐╨╛╨║╨░ ╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╤В╨╛╨╗╤М╨║╨╛ ╤В╨░╨║╨╛╨╣ ╤Б╨┐╨╛╤Б╨╛╨▒ ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П.\n'
+            '╨Я╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ ╤З╨╡╤А╨╡╨╖ FunPay\n'
+            '╨Ф╨╛╤Б╤В╤Г╨┐╨╜╤Л╨╡ ╤Б╤Г╨╝╨╝╤Л: 50тВ╜ ╨╕ 100тВ╜.',
             reply_markup=topup_kb(),
         )
     elif action == 'reviews':
@@ -788,12 +733,12 @@ async def menu_router(cb: types.CallbackQuery):
         except Exception:
             pass
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
-        await bot.send_message(cb.from_user.id, 'Отзывы покупателей:', reply_markup=kb)
+        kb.add(InlineKeyboardButton('ЁЯФЩ ╨Э╨░╨╖╨░╨┤', callback_data='menu:main'))
+        await bot.send_message(cb.from_user.id, '╨Ю╤В╨╖╤Л╨▓╤Л ╨┐╨╛╨║╤Г╨┐╨░╤В╨╡╨╗╨╡╨╣:', reply_markup=kb)
     elif action == 'channel':
-        kb = InlineKeyboardMarkup().add(InlineKeyboardButton('Открыть канал', url=CHANNEL_URL))
-        kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
-        await cb.message.edit_text('Наш канал:', reply_markup=kb)
+        kb = InlineKeyboardMarkup().add(InlineKeyboardButton('╨Ю╤В╨║╤А╤Л╤В╤М ╨║╨░╨╜╨░╨╗', url=CHANNEL_URL))
+        kb.add(InlineKeyboardButton('ЁЯФЩ ╨Э╨░╨╖╨░╨┤', callback_data='menu:main'))
+        await cb.message.edit_text('╨Э╨░╤И ╨║╨░╨╜╨░╨╗:', reply_markup=kb)
 
     await cb.answer()
 
@@ -810,35 +755,35 @@ async def profile_router(cb: types.CallbackQuery):
     if action == 'orders':
         rows = list_user_orders(cb.from_user.id, limit=15)
         if not rows:
-            text = 'История покупок пуста.'
+            text = '╨Ш╤Б╤В╨╛╤А╨╕╤П ╨┐╨╛╨║╤Г╨┐╨╛╨║ ╨┐╤Г╤Б╤В╨░.'
         else:
-            lines = ['🧾 История покупок:']
+            lines = ['ЁЯз╛ ╨Ш╤Б╤В╨╛╤А╨╕╤П ╨┐╨╛╨║╤Г╨┐╨╛╨║:']
             for order_id, title, qty, total, status, code_value, created in rows:
-                safe_title = html.escape(str(title or 'Товар'))
+                safe_title = html.escape(str(title or '╨в╨╛╨▓╨░╤А'))
                 safe_status = html.escape(str(status or 'unknown'))
-                lines.append(f'#{order_id} | {safe_title} | x{qty} | {total:.2f}₽ | {safe_status} | {created}')
+                lines.append(f'#{order_id} | {safe_title} | x{qty} | {total:.2f}тВ╜ | {safe_status} | {created}')
                 if code_value and str(status).lower() == 'delivered':
                     safe_value = html.escape(str(code_value).strip())
                     if len(safe_value) > 800:
                         safe_value = safe_value[:800] + ' ...'
-                    lines.append(f'Данные: <code>{safe_value}</code>')
+                    lines.append(f'╨Ф╨░╨╜╨╜╤Л╨╡: <code>{safe_value}</code>')
             text = '\n'.join(lines)
         await safe_edit_text(cb.message, text, reply_markup=profile_kb())
 
     elif action == 'topups':
         rows = list_user_topups(cb.from_user.id, limit=15)
         if not rows:
-            text = 'История пополнений пуста.'
+            text = '╨Ш╤Б╤В╨╛╤А╨╕╤П ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╣ ╨┐╤Г╤Б╤В╨░.'
         else:
-            lines = ['💸 История пополнений:']
+            lines = ['ЁЯТ╕ ╨Ш╤Б╤В╨╛╤А╨╕╤П ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╣:']
             for topup_id, amount, status, created in rows:
-                lines.append(f'#{topup_id} | {amount:.2f}₽ | {status} | {created}')
+                lines.append(f'#{topup_id} | {amount:.2f}тВ╜ | {status} | {created}')
             text = '\n'.join(lines)
         await safe_edit_text(cb.message, text, reply_markup=profile_kb())
 
     elif action == 'promo':
         pending_promo_input.add(cb.from_user.id)
-        await safe_edit_text(cb.message, 'Введите промокод одним сообщением:', reply_markup=back_to_main_kb())
+        await safe_edit_text(cb.message, '╨Т╨▓╨╡╨┤╨╕╤В╨╡ ╨┐╤А╨╛╨╝╨╛╨║╨╛╨┤ ╨╛╨┤╨╜╨╕╨╝ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╡╨╝:', reply_markup=back_to_main_kb())
 
     elif action == 'dailybonus':
         ok, credited, seconds_left = claim_daily_bonus(
@@ -849,16 +794,16 @@ async def profile_router(cb: types.CallbackQuery):
         if ok:
             balance = get_balance(cb.from_user.id)
             text = (
-                f'🎉 Ежедневный бонус получен: +{credited:.2f} ₽\n'
-                f'Текущий баланс: {balance:.2f} ₽\n\n'
-                f'Следующий бонус будет доступен через {DAILY_BONUS_COOLDOWN_HOURS} ч.'
+                f'ЁЯОЙ ╨Х╨╢╨╡╨┤╨╜╨╡╨▓╨╜╤Л╨╣ ╨▒╨╛╨╜╤Г╤Б ╨┐╨╛╨╗╤Г╤З╨╡╨╜: +{credited:.2f} тВ╜\n'
+                f'╨в╨╡╨║╤Г╤Й╨╕╨╣ ╨▒╨░╨╗╨░╨╜╤Б: {balance:.2f} тВ╜\n\n'
+                f'╨б╨╗╨╡╨┤╤Г╤О╤Й╨╕╨╣ ╨▒╨╛╨╜╤Г╤Б ╨▒╤Г╨┤╨╡╤В ╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜ ╤З╨╡╤А╨╡╨╖ {DAILY_BONUS_COOLDOWN_HOURS} ╤З.'
             )
         else:
             hours_left = seconds_left // 3600
             minutes_left = (seconds_left % 3600) // 60
             text = (
-                '⏳ Бонус уже получен.\n'
-                f'Следующая попытка через: {hours_left} ч {minutes_left} мин.'
+                'тП│ ╨С╨╛╨╜╤Г╤Б ╤Г╨╢╨╡ ╨┐╨╛╨╗╤Г╤З╨╡╨╜.\n'
+                f'╨б╨╗╨╡╨┤╤Г╤О╤Й╨░╤П ╨┐╨╛╨┐╤Л╤В╨║╨░ ╤З╨╡╤А╨╡╨╖: {hours_left} ╤З {minutes_left} ╨╝╨╕╨╜.'
             )
         await safe_edit_text(cb.message, text, reply_markup=profile_kb())
 
@@ -869,13 +814,13 @@ async def profile_router(cb: types.CallbackQuery):
 async def category_router(cb: types.CallbackQuery):
     category = cb.data.split(':', 1)[1]
     if category not in CATEGORY_NAMES:
-        await cb.answer('Категория не найдена', show_alert=True)
+        await cb.answer('╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░', show_alert=True)
         return
 
     products = list_products(category)
     if not products:
         await cb.message.edit_text(
-            f'В категории {CATEGORY_NAMES[category]} пока нет товаров в наличии.',
+            f'╨Т ╨║╨░╤В╨╡╨│╨╛╤А╨╕╨╕ {CATEGORY_NAMES[category]} ╨┐╨╛╨║╨░ ╨╜╨╡╤В ╤В╨╛╨▓╨░╤А╨╛╨▓ ╨▓ ╨╜╨░╨╗╨╕╤З╨╕╨╕.',
             reply_markup=back_to_main_kb(),
         )
         await cb.answer()
@@ -910,7 +855,7 @@ async def category_page_router(cb: types.CallbackQuery):
     products = list_products(category)
     if not products:
         await cb.message.edit_text(
-            f'В категории {CATEGORY_NAMES.get(category, category)} пока нет товаров в наличии.',
+            f'╨Т ╨║╨░╤В╨╡╨│╨╛╤А╨╕╨╕ {CATEGORY_NAMES.get(category, category)} ╨┐╨╛╨║╨░ ╨╜╨╡╤В ╤В╨╛╨▓╨░╤А╨╛╨▓ ╨▓ ╨╜╨░╨╗╨╕╤З╨╕╨╕.',
             reply_markup=back_to_main_kb(),
         )
         await cb.answer()
@@ -933,18 +878,18 @@ async def buy_router(cb: types.CallbackQuery):
     page = int(parts[2]) if len(parts) > 2 else 0
     product = get_product(product_id)
     if not product:
-        await cb.answer('Товар не найден', show_alert=True)
+        await cb.answer('╨в╨╛╨▓╨░╤А ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜', show_alert=True)
         return
 
     _, title, description, price, _, category, stock, *_ = product
     if stock <= 0:
-        await cb.answer('Нет в наличии', show_alert=True)
+        await cb.answer('╨Э╨╡╤В ╨▓ ╨╜╨░╨╗╨╕╤З╨╕╨╕', show_alert=True)
         return
 
     text = product_card_text(title, category, float(price), int(stock), description)
     kb = InlineKeyboardMarkup(row_width=1)
-    kb.add(InlineKeyboardButton('💰 Купить товар', callback_data=f'qtymenu:{product_id}:{page}'))
-    kb.add(InlineKeyboardButton('↩️ Назад', callback_data=f'catpage:{category}:{page}'))
+    kb.add(InlineKeyboardButton('ЁЯТ░ ╨Ъ╤Г╨┐╨╕╤В╤М ╤В╨╛╨▓╨░╤А', callback_data=f'qtymenu:{product_id}:{page}'))
+    kb.add(InlineKeyboardButton('тЖйя╕П ╨Э╨░╨╖╨░╨┤', callback_data=f'catpage:{category}:{page}'))
     await cb.message.edit_text(text, reply_markup=kb)
     await cb.answer()
 
@@ -957,19 +902,19 @@ async def qty_menu_router(cb: types.CallbackQuery):
     page = int(page_str)
     product = get_product(product_id)
     if not product:
-        await cb.answer('Товар не найден', show_alert=True)
+        await cb.answer('╨в╨╛╨▓╨░╤А ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜', show_alert=True)
         return
 
     _, title, _, price, _, category, stock, *_ = product
     if stock <= 0:
-        await cb.answer('Нет в наличии', show_alert=True)
+        await cb.answer('╨Э╨╡╤В ╨▓ ╨╜╨░╨╗╨╕╤З╨╕╨╕', show_alert=True)
         return
 
     text = (
-        f'🧾 Покупка: <b>{title}</b>\n'
-        f'Цена: <b>{float(price):.2f} ₽</b>\n'
-        f'Доступно: <b>{int(stock)} шт.</b>\n\n'
-        'Выберите количество:'
+        f'ЁЯз╛ ╨Я╨╛╨║╤Г╨┐╨║╨░: <b>{title}</b>\n'
+        f'╨ж╨╡╨╜╨░: <b>{float(price):.2f} тВ╜</b>\n'
+        f'╨Ф╨╛╤Б╤В╤Г╨┐╨╜╨╛: <b>{int(stock)} ╤И╤В.</b>\n\n'
+        '╨Т╤Л╨▒╨╡╤А╨╕╤В╨╡ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛:'
     )
     await cb.message.edit_text(text, reply_markup=quantity_kb(product_id, category, int(stock), page=page))
     await cb.answer()
@@ -983,31 +928,31 @@ async def qty_router(cb: types.CallbackQuery):
     user_id = cb.from_user.id
 
     if user_id in active_buy_users:
-        await cb.answer('Покупка уже обрабатывается, подождите...', show_alert=True)
+        await cb.answer('╨Я╨╛╨║╤Г╨┐╨║╨░ ╤Г╨╢╨╡ ╨╛╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╨╡╤В╤Б╤П, ╨┐╨╛╨┤╨╛╨╢╨┤╨╕╤В╨╡...', show_alert=True)
         return
     active_buy_users.add(user_id)
 
     try:
         product = get_product(product_id)
         if not product:
-            await cb.answer('Товар не найден', show_alert=True)
+            await cb.answer('╨в╨╛╨▓╨░╤А ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜', show_alert=True)
             return
 
         _, title, _, price, credentials, category, stock, *_ = product
 
         if qty <= 0 or qty > 10:
-            await cb.answer('Можно купить от 1 до 10 шт за раз', show_alert=True)
+            await cb.answer('╨Ь╨╛╨╢╨╜╨╛ ╨║╤Г╨┐╨╕╤В╤М ╨╛╤В 1 ╨┤╨╛ 10 ╤И╤В ╨╖╨░ ╤А╨░╨╖', show_alert=True)
             return
 
         if qty > stock:
-            await cb.answer('Недостаточно товара на складе', show_alert=True)
+            await cb.answer('╨Э╨╡╨┤╨╛╤Б╤В╨░╤В╨╛╤З╨╜╨╛ ╤В╨╛╨▓╨░╤А╨░ ╨╜╨░ ╤Б╨║╨╗╨░╨┤╨╡', show_alert=True)
             return
 
         total = float(price) * qty
         if not try_spend_balance(user_id, total):
-            await cb.answer('Недостаточно баланса', show_alert=True)
+            await cb.answer('╨Э╨╡╨┤╨╛╤Б╤В╨░╤В╨╛╤З╨╜╨╛ ╨▒╨░╨╗╨░╨╜╤Б╨░', show_alert=True)
             await cb.message.edit_text(
-                f'Недостаточно средств для покупки <b>{title}</b>.\nНужно: {total:.2f} ₽',
+                f'╨Э╨╡╨┤╨╛╤Б╤В╨░╤В╨╛╤З╨╜╨╛ ╤Б╤А╨╡╨┤╤Б╤В╨▓ ╨┤╨╗╤П ╨┐╨╛╨║╤Г╨┐╨║╨╕ <b>{title}</b>.\n╨Э╤Г╨╢╨╜╨╛: {total:.2f} тВ╜',
                 reply_markup=topup_kb(),
             )
             return
@@ -1021,16 +966,16 @@ async def qty_router(cb: types.CallbackQuery):
             if cashback > 0:
                 change_balance(user_id, cashback)
             balance = get_balance(user_id)
-            cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
+            cashback_text = f'╨Ъ╨╡╤И╨▒╤Н╨║: +{cashback:.2f} тВ╜\n' if cashback > 0 else ''
             await cb.message.edit_text(
-                f'✅ Оплата принята. Заказ #{order_id} создан.\n'
-                'Отправьте номер для входа в аккаунт.\n'
-                'После этого нажмите кнопку «Получить код для входа».\n'
+                f'тЬЕ ╨Ю╨┐╨╗╨░╤В╨░ ╨┐╤А╨╕╨╜╤П╤В╨░. ╨Ч╨░╨║╨░╨╖ #{order_id} ╤Б╨╛╨╖╨┤╨░╨╜.\n'
+                '╨Ю╤В╨┐╤А╨░╨▓╤М╤В╨╡ ╨╜╨╛╨╝╨╡╤А ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░ ╨▓ ╨░╨║╨║╨░╤Г╨╜╤В.\n'
+                '╨Я╨╛╤Б╨╗╨╡ ╤Н╤В╨╛╨│╨╛ ╨╜╨░╨╢╨╝╨╕╤В╨╡ ╨║╨╜╨╛╨┐╨║╤Г ┬л╨Я╨╛╨╗╤Г╤З╨╕╤В╤М ╨║╨╛╨┤ ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░┬╗.\n'
                 f'{cashback_text}'
-                f'Остаток баланса: {balance:.2f} ₽',
+                f'╨Ю╤Б╤В╨░╤В╨╛╨║ ╨▒╨░╨╗╨░╨╜╤Б╨░: {balance:.2f} тВ╜',
                 reply_markup=user_get_code_kb(order_id),
             )
-            await cb.answer('Ожидаю номер')
+            await cb.answer('╨Ю╨╢╨╕╨┤╨░╤О ╨╜╨╛╨╝╨╡╤А')
             return
 
         order_id = create_order(user_id, product_id, qty, total, 'delivered')
@@ -1040,18 +985,18 @@ async def qty_router(cb: types.CallbackQuery):
         if cashback > 0:
             change_balance(user_id, cashback)
         balance = get_balance(user_id)
-        cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
+        cashback_text = f'╨Ъ╨╡╤И╨▒╤Н╨║: +{cashback:.2f} тВ╜\n' if cashback > 0 else ''
         deliver_text = (
-            f'✅ Заказ #{order_id} успешно оплачен с баланса.\n'
-            f'Товар: <b>{title}</b>\n'
-            f'Количество: {qty}\n'
-            f'Сумма: {total:.2f} ₽\n'
+            f'тЬЕ ╨Ч╨░╨║╨░╨╖ #{order_id} ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╛╨┐╨╗╨░╤З╨╡╨╜ ╤Б ╨▒╨░╨╗╨░╨╜╤Б╨░.\n'
+            f'╨в╨╛╨▓╨░╤А: <b>{title}</b>\n'
+            f'╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛: {qty}\n'
+            f'╨б╤Г╨╝╨╝╨░: {total:.2f} тВ╜\n'
             f'{cashback_text}'
-            f'Остаток баланса: {balance:.2f} ₽\n\n'
-            f'Данные:\n<code>{delivery_data}</code>'
+            f'╨Ю╤Б╤В╨░╤В╨╛╨║ ╨▒╨░╨╗╨░╨╜╤Б╨░: {balance:.2f} тВ╜\n\n'
+            f'╨Ф╨░╨╜╨╜╤Л╨╡:\n<code>{delivery_data}</code>'
         )
         await cb.message.edit_text(deliver_text, reply_markup=back_to_main_kb())
-        await cb.answer('Покупка успешна')
+        await cb.answer('╨Я╨╛╨║╤Г╨┐╨║╨░ ╤Г╤Б╨┐╨╡╤И╨╜╨░')
     finally:
         active_buy_users.discard(user_id)
 
@@ -1063,20 +1008,20 @@ async def qty_custom_router(cb: types.CallbackQuery):
     page = int(page_str)
     product = get_product(product_id)
     if not product:
-        await cb.answer('Товар не найден', show_alert=True)
+        await cb.answer('╨в╨╛╨▓╨░╤А ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜', show_alert=True)
         return
 
     _, title, _, _, _, _, stock, *_ = product
     if stock <= 0:
-        await cb.answer('Нет в наличии', show_alert=True)
+        await cb.answer('╨Э╨╡╤В ╨▓ ╨╜╨░╨╗╨╕╤З╨╕╨╕', show_alert=True)
         return
 
     pending_custom_qty_input[cb.from_user.id] = {'product_id': product_id, 'page': page}
     await cb.message.edit_text(
-        f'Введите количество для <b>{title}</b> (от 1 до 10).\n'
-        f'Сейчас доступно: <b>{int(stock)} шт.</b>',
+        f'╨Т╨▓╨╡╨┤╨╕╤В╨╡ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨┤╨╗╤П <b>{title}</b> (╨╛╤В 1 ╨┤╨╛ 10).\n'
+        f'╨б╨╡╨╣╤З╨░╤Б ╨┤╨╛╤Б╤В╤Г╨┐╨╜╨╛: <b>{int(stock)} ╤И╤В.</b>',
         reply_markup=InlineKeyboardMarkup().add(
-            InlineKeyboardButton('↩️ Назад', callback_data=f'qtymenu:{product_id}:{page}')
+            InlineKeyboardButton('тЖйя╕П ╨Э╨░╨╖╨░╨┤', callback_data=f'qtymenu:{product_id}:{page}')
         ),
     )
     await cb.answer()
@@ -1088,23 +1033,23 @@ async def topup_router(cb: types.CallbackQuery):
 
     if action == 'custom':
         pending_custom_topup.add(cb.from_user.id)
-        await cb.message.edit_text('Введите сумму пополнения числом (например 750):', reply_markup=back_to_main_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕╤В╨╡ ╤Б╤Г╨╝╨╝╤Г ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П ╤З╨╕╤Б╨╗╨╛╨╝ (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А 750):', reply_markup=back_to_main_kb())
         await cb.answer()
         return
 
     amount = float(action)
     topup_id = create_topup(cb.from_user.id, amount, '')
-    payment_link, payment_id = create_topup_payment(amount, cb.from_user.id, topup_id)
+    payment_link, payment_id = create_funpay_payment(amount, cb.from_user.id, topup_id)
     set_topup_payment_data(topup_id, payment_link, payment_id)
     if payment_id:
         set_topup_external_status(topup_id, 'created')
 
     await cb.message.edit_text(
-        f'Заявка на пополнение #{topup_id} создана на {amount:.2f} ₽\n'
-        f'1) Оплатите товар по ссылке: {payment_link}\n'
-        f'2) В комментарии к заказу укажите код: <code>topup_{topup_id}_{cb.from_user.id}</code>\n'
-        f'3) Сумма оплаты должна быть: {amount:.2f} ₽\n\n'
-        'После оплаты баланс подтвердится автоматически (или админом, если API недоступен).',
+        f'╨Ч╨░╤П╨▓╨║╨░ ╨╜╨░ ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ #{topup_id} ╤Б╨╛╨╖╨┤╨░╨╜╨░ ╨╜╨░ {amount:.2f} тВ╜\n'
+        f'1) ╨Ю╨┐╨╗╨░╤В╨╕╤В╨╡ ╤В╨╛╨▓╨░╤А ╨┐╨╛ ╤Б╤Б╤Л╨╗╨║╨╡: {payment_link}\n'
+        f'2) ╨Т ╨║╨╛╨╝╨╝╨╡╨╜╤В╨░╤А╨╕╨╕ ╨║ ╨╖╨░╨║╨░╨╖╤Г ╤Г╨║╨░╨╢╨╕╤В╨╡ ╨║╨╛╨┤: <code>topup_{topup_id}_{cb.from_user.id}</code>\n'
+        f'3) ╨б╤Г╨╝╨╝╨░ ╨╛╨┐╨╗╨░╤В╤Л ╨┤╨╛╨╗╨╢╨╜╨░ ╨▒╤Л╤В╤М: {amount:.2f} тВ╜\n\n'
+        '╨Я╨╛╤Б╨╗╨╡ ╨╛╨┐╨╗╨░╤В╤Л ╨▒╨░╨╗╨░╨╜╤Б ╨┐╨╛╨┤╤В╨▓╨╡╤А╨┤╨╕╤В╤Б╤П ╨░╨▓╤В╨╛╨╝╨░╤В╨╕╤З╨╡╤Б╨║╨╕ (╨╕╨╗╨╕ ╨░╨┤╨╝╨╕╨╜╨╛╨╝, ╨╡╤Б╨╗╨╕ API ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜).',
         reply_markup=back_to_main_kb(),
     )
 
@@ -1112,22 +1057,22 @@ async def topup_router(cb: types.CallbackQuery):
         try:
             await bot.send_message(
                 admin_id,
-                f'Новая заявка на пополнение #{topup_id}\n'
-                f'Пользователь: {cb.from_user.id}\n'
-                f'Сумма: {amount:.2f} ₽\n'
+                f'╨Э╨╛╨▓╨░╤П ╨╖╨░╤П╨▓╨║╨░ ╨╜╨░ ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ #{topup_id}\n'
+                f'╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М: {cb.from_user.id}\n'
+                f'╨б╤Г╨╝╨╝╨░: {amount:.2f} тВ╜\n'
                 f'payment_id: {payment_id or "-"}\n'
-                f'Подтвердить: /confirmtopup {topup_id}',
+                f'╨Я╨╛╨┤╤В╨▓╨╡╤А╨┤╨╕╤В╤М: /confirmtopup {topup_id}',
             )
         except Exception:
             pass
 
-    await cb.answer('Заявка создана')
+    await cb.answer('╨Ч╨░╤П╨▓╨║╨░ ╤Б╨╛╨╖╨┤╨░╨╜╨░')
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('admpanel:'))
 async def admin_panel_router(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.id):
-        await cb.answer('Только админ', show_alert=True)
+        await cb.answer('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜', show_alert=True)
         return
 
     action = cb.data.split(':', 1)[1]
@@ -1136,55 +1081,55 @@ async def admin_panel_router(cb: types.CallbackQuery):
     if action == 'add_product':
         admin_add_product_state[user_id] = {'step': 'category'}
         admin_action_state.pop(user_id, None)
-        await cb.message.edit_text('Выбери категорию для нового товара:', reply_markup=admin_category_kb())
+        await cb.message.edit_text('╨Т╤Л╨▒╨╡╤А╨╕ ╨║╨░╤В╨╡╨│╨╛╤А╨╕╤О ╨┤╨╗╤П ╨╜╨╛╨▓╨╛╨│╨╛ ╤В╨╛╨▓╨░╤А╨░:', reply_markup=admin_category_kb())
     elif action == 'home':
         admin_add_product_state.pop(user_id, None)
         admin_action_state.pop(user_id, None)
-        await cb.message.edit_text('Панель админа: выбери действие', reply_markup=admin_panel_kb())
+        await cb.message.edit_text('╨Я╨░╨╜╨╡╨╗╤М ╨░╨┤╨╝╨╕╨╜╨░: ╨▓╤Л╨▒╨╡╤А╨╕ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╨╡', reply_markup=admin_panel_kb())
     elif action == 'cancel_add':
         admin_add_product_state.pop(user_id, None)
-        await cb.message.edit_text('Создание товара отменено.', reply_markup=admin_panel_kb())
+        await cb.message.edit_text('╨б╨╛╨╖╨┤╨░╨╜╨╕╨╡ ╤В╨╛╨▓╨░╤А╨░ ╨╛╤В╨╝╨╡╨╜╨╡╨╜╨╛.', reply_markup=admin_panel_kb())
     elif action == 'cancel_any':
         admin_add_product_state.pop(user_id, None)
         admin_action_state.pop(user_id, None)
-        await cb.message.edit_text('Текущее действие отменено.', reply_markup=admin_panel_kb())
+        await cb.message.edit_text('╨в╨╡╨║╤Г╤Й╨╡╨╡ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╨╡ ╨╛╤В╨╝╨╡╨╜╨╡╨╜╨╛.', reply_markup=admin_panel_kb())
     elif action == 'add_balance':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'add_balance', 'step': 'user_id'}
-        await cb.message.edit_text('Введи ID пользователя для пополнения баланса:', reply_markup=admin_step_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ ID ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П ╨┤╨╗╤П ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П ╨▒╨░╨╗╨░╨╜╤Б╨░:', reply_markup=admin_step_kb())
     elif action == 'confirm_topup':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'confirm_topup', 'step': 'topup_id'}
-        await cb.message.edit_text('Введи ID пополнения (topup_id):', reply_markup=admin_step_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ ID ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П (topup_id):', reply_markup=admin_step_kb())
     elif action == 'create_promo':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'create_promo', 'step': 'code'}
-        await cb.message.edit_text('Введи код промокода (например: BONUS50):', reply_markup=admin_step_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨┤ ╨┐╤А╨╛╨╝╨╛╨║╨╛╨┤╨░ (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А: BONUS50):', reply_markup=admin_step_kb())
     elif action == 'send_code':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'send_code', 'step': 'order_id'}
-        await cb.message.edit_text('Введи ID заказа:', reply_markup=admin_step_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ ID ╨╖╨░╨║╨░╨╖╨░:', reply_markup=admin_step_kb())
     elif action == 'refill':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'refill', 'step': 'product_id'}
-        await cb.message.edit_text('Введи product_id для пополнения остатка:', reply_markup=admin_step_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ product_id ╨┤╨╗╤П ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П ╨╛╤Б╤В╨░╤В╨║╨░:', reply_markup=admin_step_kb())
     elif action == 'set_stock':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'set_stock', 'step': 'product_id'}
-        await cb.message.edit_text('Введи product_id для установки остатка:', reply_markup=admin_step_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ product_id ╨┤╨╗╤П ╤Г╤Б╤В╨░╨╜╨╛╨▓╨║╨╕ ╨╛╤Б╤В╨░╤В╨║╨░:', reply_markup=admin_step_kb())
     elif action == 'delete_product':
         admin_add_product_state.pop(user_id, None)
         admin_action_state[user_id] = {'action': 'delete_product', 'step': 'product_id'}
-        await cb.message.edit_text('Введи product_id для удаления товара из каталога:', reply_markup=admin_step_kb())
+        await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ product_id ╨┤╨╗╤П ╤Г╨┤╨░╨╗╨╡╨╜╨╕╤П ╤В╨╛╨▓╨░╤А╨░ ╨╕╨╖ ╨║╨░╤В╨░╨╗╨╛╨│╨░:', reply_markup=admin_step_kb())
     elif action == 'list_products':
         rows = list_all_products_admin()
         if not rows:
-            await cb.message.edit_text('Товаров пока нет.', reply_markup=admin_panel_kb())
+            await cb.message.edit_text('╨в╨╛╨▓╨░╤А╨╛╨▓ ╨┐╨╛╨║╨░ ╨╜╨╡╤В.', reply_markup=admin_panel_kb())
         else:
-            lines = ['📋 Товары:']
+            lines = ['ЁЯУЛ ╨в╨╛╨▓╨░╤А╤Л:']
             for pid, title, category, price, stock, auto_restock in rows:
                 auto_text = 'auto' if int(auto_restock) == 1 else 'manual'
-                lines.append(f'#{pid} | {title} | {category} | {float(price):.2f}₽ | stock={int(stock)} | {auto_text}')
+                lines.append(f'#{pid} | {title} | {category} | {float(price):.2f}тВ╜ | stock={int(stock)} | {auto_text}')
             await cb.message.edit_text('\n'.join(lines), reply_markup=admin_panel_kb())
 
     await cb.answer()
@@ -1193,23 +1138,23 @@ async def admin_panel_router(cb: types.CallbackQuery):
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('admsendcode:'))
 async def admin_sendcode_quick_router(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.id):
-        await cb.answer('Только админ', show_alert=True)
+        await cb.answer('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜', show_alert=True)
         return
 
     try:
         order_id = int(cb.data.split(':', 1)[1])
     except Exception:
-        await cb.answer('Неверный order_id', show_alert=True)
+        await cb.answer('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ order_id', show_alert=True)
         return
 
     order = get_order(order_id)
     if not order:
-        await cb.answer('Заказ не найден', show_alert=True)
+        await cb.answer('╨Ч╨░╨║╨░╨╖ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜', show_alert=True)
         return
 
     _, _, _, _, _, status, _, _, _ = order
     if status not in ('waiting_code', 'waiting_phone'):
-        await cb.answer('Заказ не ожидает код', show_alert=True)
+        await cb.answer('╨Ч╨░╨║╨░╨╖ ╨╜╨╡ ╨╛╨╢╨╕╨┤╨░╨╡╤В ╨║╨╛╨┤', show_alert=True)
         return
 
     admin_action_state[cb.from_user.id] = {
@@ -1218,10 +1163,10 @@ async def admin_sendcode_quick_router(cb: types.CallbackQuery):
         'order_id': str(order_id),
     }
     await cb.message.answer(
-        f'Заказ #{order_id} выбран. Введите код следующим сообщением.',
+        f'╨Ч╨░╨║╨░╨╖ #{order_id} ╨▓╤Л╨▒╤А╨░╨╜. ╨Т╨▓╨╡╨┤╨╕╤В╨╡ ╨║╨╛╨┤ ╤Б╨╗╨╡╨┤╤Г╤О╤Й╨╕╨╝ ╤Б╨╛╨╛╨▒╤Й╨╡╨╜╨╕╨╡╨╝.',
         reply_markup=admin_step_kb(),
     )
-    await cb.answer('Ожидаю код')
+    await cb.answer('╨Ю╨╢╨╕╨┤╨░╤О ╨║╨╛╨┤')
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('userreqcode:'))
@@ -1229,89 +1174,89 @@ async def user_request_code_router(cb: types.CallbackQuery):
     try:
         order_id = int(cb.data.split(':', 1)[1])
     except Exception:
-        await cb.answer('Неверный номер заказа', show_alert=True)
+        await cb.answer('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╨╜╨╛╨╝╨╡╤А ╨╖╨░╨║╨░╨╖╨░', show_alert=True)
         return
 
     order = get_order(order_id)
     if not order:
-        await cb.answer('Заказ не найден', show_alert=True)
+        await cb.answer('╨Ч╨░╨║╨░╨╖ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜', show_alert=True)
         return
 
     _, buyer_user_id, product_id, qty, total, status, client_phone, _, _ = order
     if int(buyer_user_id) != int(cb.from_user.id):
-        await cb.answer('Это не ваш заказ', show_alert=True)
+        await cb.answer('╨н╤В╨╛ ╨╜╨╡ ╨▓╨░╤И ╨╖╨░╨║╨░╨╖', show_alert=True)
         return
 
     if status == 'waiting_phone':
-        await cb.answer('Сначала отправьте номер для входа в аккаунт', show_alert=True)
+        await cb.answer('╨б╨╜╨░╤З╨░╨╗╨░ ╨╛╤В╨┐╤А╨░╨▓╤М╤В╨╡ ╨╜╨╛╨╝╨╡╤А ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░ ╨▓ ╨░╨║╨║╨░╤Г╨╜╤В', show_alert=True)
         return
 
     if status == 'delivered':
-        await cb.answer('Код уже выдан по этому заказу', show_alert=True)
+        await cb.answer('╨Ъ╨╛╨┤ ╤Г╨╢╨╡ ╨▓╤Л╨┤╨░╨╜ ╨┐╨╛ ╤Н╤В╨╛╨╝╤Г ╨╖╨░╨║╨░╨╖╤Г', show_alert=True)
         return
 
     product = get_product(int(product_id))
-    product_title = html.escape(str(product[1] if product else 'TG аккаунт'))
+    product_title = html.escape(str(product[1] if product else 'TG ╨░╨║╨║╨░╤Г╨╜╤В'))
     product_data = ''
     if product:
         product_data = format_delivery_credentials(str(product[4] or ''), int(qty))
-    safe_product_data = html.escape(product_data) if product_data else 'не указаны'
-    phone_value = html.escape(str(client_phone).strip()) if client_phone else 'не указан'
+    safe_product_data = html.escape(product_data) if product_data else '╨╜╨╡ ╤Г╨║╨░╨╖╨░╨╜╤Л'
+    phone_value = html.escape(str(client_phone).strip()) if client_phone else '╨╜╨╡ ╤Г╨║╨░╨╖╨░╨╜'
 
     for admin_id in ADMIN_IDS:
         try:
             await bot.send_message(
                 admin_id,
-                '📩 Запрос кода от покупателя\n'
-                f'Заказ: <b>#{order_id}</b>\n'
-                f'Пользователь: <code>{buyer_user_id}</code>\n'
-                f'Товар: <b>{product_title}</b>\n'
-                f'Количество: <b>{int(qty)}</b>\n'
-                f'Сумма: <b>{float(total):.2f} ₽</b>\n'
-                f'Данные товара: <code>{safe_product_data}</code>\n'
-                f'Номер: <code>{phone_value}</code>\n\n'
-                f'Отправить код: /sendcode {order_id} 12345',
+                'ЁЯУй ╨Ч╨░╨┐╤А╨╛╤Б ╨║╨╛╨┤╨░ ╨╛╤В ╨┐╨╛╨║╤Г╨┐╨░╤В╨╡╨╗╤П\n'
+                f'╨Ч╨░╨║╨░╨╖: <b>#{order_id}</b>\n'
+                f'╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М: <code>{buyer_user_id}</code>\n'
+                f'╨в╨╛╨▓╨░╤А: <b>{product_title}</b>\n'
+                f'╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛: <b>{int(qty)}</b>\n'
+                f'╨б╤Г╨╝╨╝╨░: <b>{float(total):.2f} тВ╜</b>\n'
+                f'╨Ф╨░╨╜╨╜╤Л╨╡ ╤В╨╛╨▓╨░╤А╨░: <code>{safe_product_data}</code>\n'
+                f'╨Э╨╛╨╝╨╡╤А: <code>{phone_value}</code>\n\n'
+                f'╨Ю╤В╨┐╤А╨░╨▓╨╕╤В╤М ╨║╨╛╨┤: /sendcode {order_id} 12345',
                 reply_markup=admin_get_code_kb(order_id),
             )
         except Exception:
             pass
 
-    await cb.answer('Запрос отправлен администратору')
+    await cb.answer('╨Ч╨░╨┐╤А╨╛╤Б ╨╛╤В╨┐╤А╨░╨▓╨╗╨╡╨╜ ╨░╨┤╨╝╨╕╨╜╨╕╤Б╤В╤А╨░╤В╨╛╤А╤Г')
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('admaddcat:'))
 async def admin_add_category_router(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.id):
-        await cb.answer('Только админ', show_alert=True)
+        await cb.answer('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜', show_alert=True)
         return
 
     user_id = cb.from_user.id
     state = admin_add_product_state.get(user_id)
     if not state:
-        await cb.answer('Сначала открой /adminpanel', show_alert=True)
+        await cb.answer('╨б╨╜╨░╤З╨░╨╗╨░ ╨╛╤В╨║╤А╨╛╨╣ /adminpanel', show_alert=True)
         return
 
     category = cb.data.split(':', 1)[1]
     if category not in CATEGORY_NAMES:
-        await cb.answer('Неверная категория', show_alert=True)
+        await cb.answer('╨Э╨╡╨▓╨╡╤А╨╜╨░╤П ╨║╨░╤В╨╡╨│╨╛╤А╨╕╤П', show_alert=True)
         return
 
     state['category'] = category
     state['step'] = 'title'
-    await cb.message.edit_text('Введи название товара (например: 🇩🇪 Германия 3 дня):')
+    await cb.message.edit_text('╨Т╨▓╨╡╨┤╨╕ ╨╜╨░╨╖╨▓╨░╨╜╨╕╨╡ ╤В╨╛╨▓╨░╤А╨░ (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А: ЁЯЗйЁЯЗк ╨У╨╡╤А╨╝╨░╨╜╨╕╤П 3 ╨┤╨╜╤П):')
     await cb.answer()
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('admaddauto:'))
 async def admin_add_auto_router(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.id):
-        await cb.answer('Только админ', show_alert=True)
+        await cb.answer('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜', show_alert=True)
         return
 
     user_id = cb.from_user.id
     state = admin_add_product_state.get(user_id)
     if not state or state.get('step') != 'auto_restock':
-        await cb.answer('Сначала пройди шаги мастера', show_alert=True)
+        await cb.answer('╨б╨╜╨░╤З╨░╨╗╨░ ╨┐╤А╨╛╨╣╨┤╨╕ ╤И╨░╨│╨╕ ╨╝╨░╤Б╤В╨╡╤А╨░', show_alert=True)
         return
 
     choice = cb.data.split(':', 1)[1]
@@ -1319,31 +1264,31 @@ async def admin_add_auto_router(cb: types.CallbackQuery):
     state['auto_restock'] = str(auto_restock)
     state['step'] = 'confirm'
 
-    auto_text = 'включено (+1 к складу каждые 30 секунд)' if auto_restock else 'выключено'
+    auto_text = '╨▓╨║╨╗╤О╤З╨╡╨╜╨╛ (+1 ╨║ ╤Б╨║╨╗╨░╨┤╤Г ╨║╨░╨╢╨┤╤Л╨╡ 30 ╤Б╨╡╨║╤Г╨╜╨┤)' if auto_restock else '╨▓╤Л╨║╨╗╤О╤З╨╡╨╜╨╛'
     await cb.message.edit_text(
-        'Проверь данные товара перед сохранением:\n\n'
-        f'Категория: {CATEGORY_NAMES.get(state["category"], state["category"])}\n'
-        f'Название: {state["title"]}\n'
-        f'Цена: {float(state["price"]):.2f} ₽\n'
-        f'Остаток: {int(state["stock"])}\n'
-        f'Данные: {state["credentials"]}\n'
-        f'Описание: {state["description"]}\n'
-        f'Автообновление: {auto_text}',
+        '╨Я╤А╨╛╨▓╨╡╤А╤М ╨┤╨░╨╜╨╜╤Л╨╡ ╤В╨╛╨▓╨░╤А╨░ ╨┐╨╡╤А╨╡╨┤ ╤Б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╕╨╡╨╝:\n\n'
+        f'╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П: {CATEGORY_NAMES.get(state["category"], state["category"])}\n'
+        f'╨Э╨░╨╖╨▓╨░╨╜╨╕╨╡: {state["title"]}\n'
+        f'╨ж╨╡╨╜╨░: {float(state["price"]):.2f} тВ╜\n'
+        f'╨Ю╤Б╤В╨░╤В╨╛╨║: {int(state["stock"])}\n'
+        f'╨Ф╨░╨╜╨╜╤Л╨╡: {state["credentials"]}\n'
+        f'╨Ю╨┐╨╕╤Б╨░╨╜╨╕╨╡: {state["description"]}\n'
+        f'╨Р╨▓╤В╨╛╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜╨╕╨╡: {auto_text}',
         reply_markup=admin_confirm_product_kb(),
     )
-    await cb.answer('Проверь и подтверди')
+    await cb.answer('╨Я╤А╨╛╨▓╨╡╤А╤М ╨╕ ╨┐╨╛╨┤╤В╨▓╨╡╤А╨┤╨╕')
 
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('admaddsave:'))
 async def admin_add_save_router(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.id):
-        await cb.answer('Только админ', show_alert=True)
+        await cb.answer('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜', show_alert=True)
         return
 
     user_id = cb.from_user.id
     state = admin_add_product_state.get(user_id)
     if not state or state.get('step') != 'confirm':
-        await cb.answer('Нет данных для сохранения', show_alert=True)
+        await cb.answer('╨Э╨╡╤В ╨┤╨░╨╜╨╜╤Л╤Е ╨┤╨╗╤П ╤Б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╕╤П', show_alert=True)
         return
 
     product_id = add_product(
@@ -1357,16 +1302,16 @@ async def admin_add_save_router(cb: types.CallbackQuery):
         restock_every_minutes=5,
         restock_amount=1,
     )
-    auto_text = 'включено (+1 к складу каждые 30 секунд)' if int(state.get('auto_restock', '0')) == 1 else 'выключено'
+    auto_text = '╨▓╨║╨╗╤О╤З╨╡╨╜╨╛ (+1 ╨║ ╤Б╨║╨╗╨░╨┤╤Г ╨║╨░╨╢╨┤╤Л╨╡ 30 ╤Б╨╡╨║╤Г╨╜╨┤)' if int(state.get('auto_restock', '0')) == 1 else '╨▓╤Л╨║╨╗╤О╤З╨╡╨╜╨╛'
     admin_add_product_state.pop(user_id, None)
     await cb.message.edit_text(
-        f'✅ Товар добавлен, id={product_id}\n'
-        f'Категория: {CATEGORY_NAMES.get(state["category"], state["category"])}\n'
-        f'Остаток на складе: {int(state["stock"])}\n'
-        f'Автопополнение склада: {auto_text}',
+        f'тЬЕ ╨в╨╛╨▓╨░╤А ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜, id={product_id}\n'
+        f'╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╤П: {CATEGORY_NAMES.get(state["category"], state["category"])}\n'
+        f'╨Ю╤Б╤В╨░╤В╨╛╨║ ╨╜╨░ ╤Б╨║╨╗╨░╨┤╨╡: {int(state["stock"])}\n'
+        f'╨Р╨▓╤В╨╛╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ ╤Б╨║╨╗╨░╨┤╨░: {auto_text}',
         reply_markup=admin_panel_kb(),
     )
-    await cb.answer('Сохранено')
+    await cb.answer('╨б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╛')
 
 
 @dp.message_handler(content_types=types.ContentType.TEXT)
@@ -1379,17 +1324,17 @@ async def text_router(message: types.Message):
         try:
             qty = int(text)
         except ValueError:
-            await message.answer('Введите целое число от 1 до 10.')
+            await message.answer('╨Т╨▓╨╡╨┤╨╕╤В╨╡ ╤Ж╨╡╨╗╨╛╨╡ ╤З╨╕╤Б╨╗╨╛ ╨╛╤В 1 ╨┤╨╛ 10.')
             return
 
         if qty < 1 or qty > 10:
-            await message.answer('Можно купить только от 1 до 10 шт за раз.')
+            await message.answer('╨Ь╨╛╨╢╨╜╨╛ ╨║╤Г╨┐╨╕╤В╤М ╤В╨╛╨╗╤М╨║╨╛ ╨╛╤В 1 ╨┤╨╛ 10 ╤И╤В ╨╖╨░ ╤А╨░╨╖.')
             return
 
         product_id = int(pending_data['product_id'])
 
         if user_id in active_buy_users:
-            await message.answer('Покупка уже обрабатывается, подождите...')
+            await message.answer('╨Я╨╛╨║╤Г╨┐╨║╨░ ╤Г╨╢╨╡ ╨╛╨▒╤А╨░╨▒╨░╤В╤Л╨▓╨░╨╡╤В╤Б╤П, ╨┐╨╛╨┤╨╛╨╢╨┤╨╕╤В╨╡...')
             return
         active_buy_users.add(user_id)
 
@@ -1397,13 +1342,13 @@ async def text_router(message: types.Message):
             product = get_product(product_id)
             if not product:
                 pending_custom_qty_input.pop(user_id, None)
-                await message.answer('Товар не найден.', reply_markup=back_to_main_kb())
+                await message.answer('╨в╨╛╨▓╨░╤А ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜.', reply_markup=back_to_main_kb())
                 return
 
             _, title, _, price, credentials, category, stock, *_ = product
             if qty > int(stock):
                 await message.answer(
-                    f'Недостаточно товара на складе. Доступно: {int(stock)} шт.',
+                    f'╨Э╨╡╨┤╨╛╤Б╤В╨░╤В╨╛╤З╨╜╨╛ ╤В╨╛╨▓╨░╤А╨░ ╨╜╨░ ╤Б╨║╨╗╨░╨┤╨╡. ╨Ф╨╛╤Б╤В╤Г╨┐╨╜╨╛: {int(stock)} ╤И╤В.',
                     reply_markup=back_to_main_kb(),
                 )
                 return
@@ -1411,7 +1356,7 @@ async def text_router(message: types.Message):
             total = float(price) * qty
             if not try_spend_balance(user_id, total):
                 await message.answer(
-                    f'Недостаточно средств для покупки <b>{title}</b>.\nНужно: {total:.2f} ₽',
+                    f'╨Э╨╡╨┤╨╛╤Б╤В╨░╤В╨╛╤З╨╜╨╛ ╤Б╤А╨╡╨┤╤Б╤В╨▓ ╨┤╨╗╤П ╨┐╨╛╨║╤Г╨┐╨║╨╕ <b>{title}</b>.\n╨Э╤Г╨╢╨╜╨╛: {total:.2f} тВ╜',
                     reply_markup=topup_kb(),
                 )
                 return
@@ -1425,13 +1370,13 @@ async def text_router(message: types.Message):
                 if cashback > 0:
                     change_balance(user_id, cashback)
                 balance = get_balance(user_id)
-                cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
+                cashback_text = f'╨Ъ╨╡╤И╨▒╤Н╨║: +{cashback:.2f} тВ╜\n' if cashback > 0 else ''
                 await message.answer(
-                    f'✅ Оплата принята. Заказ #{order_id} создан.\n'
-                    'Отправьте номер для входа в аккаунт.\n'
-                    'После этого нажмите кнопку «Получить код для входа».\n'
+                    f'тЬЕ ╨Ю╨┐╨╗╨░╤В╨░ ╨┐╤А╨╕╨╜╤П╤В╨░. ╨Ч╨░╨║╨░╨╖ #{order_id} ╤Б╨╛╨╖╨┤╨░╨╜.\n'
+                    '╨Ю╤В╨┐╤А╨░╨▓╤М╤В╨╡ ╨╜╨╛╨╝╨╡╤А ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░ ╨▓ ╨░╨║╨║╨░╤Г╨╜╤В.\n'
+                    '╨Я╨╛╤Б╨╗╨╡ ╤Н╤В╨╛╨│╨╛ ╨╜╨░╨╢╨╝╨╕╤В╨╡ ╨║╨╜╨╛╨┐╨║╤Г ┬л╨Я╨╛╨╗╤Г╤З╨╕╤В╤М ╨║╨╛╨┤ ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░┬╗.\n'
                     f'{cashback_text}'
-                    f'Остаток баланса: {balance:.2f} ₽',
+                    f'╨Ю╤Б╤В╨░╤В╨╛╨║ ╨▒╨░╨╗╨░╨╜╤Б╨░: {balance:.2f} тВ╜',
                     reply_markup=user_get_code_kb(order_id),
                 )
                 pending_custom_qty_input.pop(user_id, None)
@@ -1444,15 +1389,15 @@ async def text_router(message: types.Message):
             if cashback > 0:
                 change_balance(user_id, cashback)
             balance = get_balance(user_id)
-            cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
+            cashback_text = f'╨Ъ╨╡╤И╨▒╤Н╨║: +{cashback:.2f} тВ╜\n' if cashback > 0 else ''
             await message.answer(
-                f'✅ Заказ #{order_id} успешно оплачен с баланса.\n'
-                f'Товар: <b>{title}</b>\n'
-                f'Количество: {qty}\n'
-                f'Сумма: {total:.2f} ₽\n'
+                f'тЬЕ ╨Ч╨░╨║╨░╨╖ #{order_id} ╤Г╤Б╨┐╨╡╤И╨╜╨╛ ╨╛╨┐╨╗╨░╤З╨╡╨╜ ╤Б ╨▒╨░╨╗╨░╨╜╤Б╨░.\n'
+                f'╨в╨╛╨▓╨░╤А: <b>{title}</b>\n'
+                f'╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛: {qty}\n'
+                f'╨б╤Г╨╝╨╝╨░: {total:.2f} тВ╜\n'
                 f'{cashback_text}'
-                f'Остаток баланса: {balance:.2f} ₽\n\n'
-                f'Данные:\n<code>{delivery_data}</code>',
+                f'╨Ю╤Б╤В╨░╤В╨╛╨║ ╨▒╨░╨╗╨░╨╜╤Б╨░: {balance:.2f} тВ╜\n\n'
+                f'╨Ф╨░╨╜╨╜╤Л╨╡:\n<code>{delivery_data}</code>',
                 reply_markup=back_to_main_kb(),
             )
             pending_custom_qty_input.pop(user_id, None)
@@ -1470,29 +1415,29 @@ async def text_router(message: types.Message):
                 try:
                     target_user_id = int(text)
                 except ValueError:
-                    await message.answer('ID должен быть числом. Введи снова:')
+                    await message.answer('ID ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                     return
                 state['user_id'] = str(target_user_id)
                 state['step'] = 'amount'
-                await message.answer('Введи сумму пополнения (можно отрицательную для списания):')
+                await message.answer('╨Т╨▓╨╡╨┤╨╕ ╤Б╤Г╨╝╨╝╤Г ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╤П (╨╝╨╛╨╢╨╜╨╛ ╨╛╤В╤А╨╕╤Ж╨░╤В╨╡╨╗╤М╨╜╤Г╤О ╨┤╨╗╤П ╤Б╨┐╨╕╤Б╨░╨╜╨╕╤П):')
                 return
 
             if step == 'amount':
                 try:
                     amount = float(text.replace(',', '.'))
                 except ValueError:
-                    await message.answer('Сумма должна быть числом. Введи снова:')
+                    await message.answer('╨б╤Г╨╝╨╝╨░ ╨┤╨╛╨╗╨╢╨╜╨░ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                     return
                 target_user_id = int(state['user_id'])
                 change_balance(target_user_id, amount)
                 balance = get_balance(target_user_id)
                 admin_action_state.pop(user_id, None)
                 await message.answer(
-                    f'✅ Баланс пользователя {target_user_id} изменен на {amount:.2f} ₽.\nТекущий баланс: {balance:.2f} ₽',
+                    f'тЬЕ ╨С╨░╨╗╨░╨╜╤Б ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П {target_user_id} ╨╕╨╖╨╝╨╡╨╜╨╡╨╜ ╨╜╨░ {amount:.2f} тВ╜.\n╨в╨╡╨║╤Г╤Й╨╕╨╣ ╨▒╨░╨╗╨░╨╜╤Б: {balance:.2f} тВ╜',
                     reply_markup=admin_panel_kb(),
                 )
                 try:
-                    await bot.send_message(target_user_id, f'✅ Ваш баланс изменен на {amount:.2f} ₽.\nТекущий баланс: {balance:.2f} ₽')
+                    await bot.send_message(target_user_id, f'тЬЕ ╨Т╨░╤И ╨▒╨░╨╗╨░╨╜╤Б ╨╕╨╖╨╝╨╡╨╜╨╡╨╜ ╨╜╨░ {amount:.2f} тВ╜.\n╨в╨╡╨║╤Г╤Й╨╕╨╣ ╨▒╨░╨╗╨░╨╜╤Б: {balance:.2f} тВ╜')
                 except Exception:
                     pass
                 return
@@ -1501,23 +1446,23 @@ async def text_router(message: types.Message):
             try:
                 topup_id = int(text)
             except ValueError:
-                await message.answer('topup_id должен быть числом. Введи снова:')
+                await message.answer('topup_id ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                 return
 
             result = confirm_topup(topup_id)
             if not result:
-                await message.answer('Пополнение не найдено. Введи другой topup_id:')
+                await message.answer('╨Я╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨╛. ╨Т╨▓╨╡╨┤╨╕ ╨┤╤А╤Г╨│╨╛╨╣ topup_id:')
                 return
 
             _, target_user_id, amount, _ = result
             balance = get_balance(target_user_id)
             admin_action_state.pop(user_id, None)
             await message.answer(
-                f'✅ Пополнение #{topup_id} подтверждено на {float(amount):.2f} ₽.',
+                f'тЬЕ ╨Я╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ #{topup_id} ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╛ ╨╜╨░ {float(amount):.2f} тВ╜.',
                 reply_markup=admin_panel_kb(),
             )
             try:
-                await bot.send_message(target_user_id, f'✅ Ваш баланс пополнен на {float(amount):.2f} ₽.\nТекущий баланс: {balance:.2f} ₽')
+                await bot.send_message(target_user_id, f'тЬЕ ╨Т╨░╤И ╨▒╨░╨╗╨░╨╜╤Б ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜ ╨╜╨░ {float(amount):.2f} тВ╜.\n╨в╨╡╨║╤Г╤Й╨╕╨╣ ╨▒╨░╨╗╨░╨╜╤Б: {balance:.2f} тВ╜')
             except Exception:
                 pass
             return
@@ -1526,7 +1471,7 @@ async def text_router(message: types.Message):
             if step == 'code':
                 state['code'] = text.upper()
                 state['step'] = 'amount'
-                await message.answer('Введи сумму промокода:')
+                await message.answer('╨Т╨▓╨╡╨┤╨╕ ╤Б╤Г╨╝╨╝╤Г ╨┐╤А╨╛╨╝╨╛╨║╨╛╨┤╨░:')
                 return
             if step == 'amount':
                 try:
@@ -1534,11 +1479,11 @@ async def text_router(message: types.Message):
                     if amount <= 0:
                         raise ValueError
                 except ValueError:
-                    await message.answer('Сумма должна быть числом > 0. Введи снова:')
+                    await message.answer('╨б╤Г╨╝╨╝╨░ ╨┤╨╛╨╗╨╢╨╜╨░ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝ > 0. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                     return
                 state['amount'] = str(amount)
                 state['step'] = 'uses'
-                await message.answer('Введи количество активаций:')
+                await message.answer('╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨░╨║╤В╨╕╨▓╨░╤Ж╨╕╨╣:')
                 return
             if step == 'uses':
                 try:
@@ -1546,12 +1491,12 @@ async def text_router(message: types.Message):
                     if uses <= 0:
                         raise ValueError
                 except ValueError:
-                    await message.answer('Количество активаций должно быть целым > 0. Введи снова:')
+                    await message.answer('╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨░╨║╤В╨╕╨▓╨░╤Ж╨╕╨╣ ╨┤╨╛╨╗╨╢╨╜╨╛ ╨▒╤Л╤В╤М ╤Ж╨╡╨╗╤Л╨╝ > 0. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                     return
                 create_promo(state['code'], float(state['amount']), uses)
                 admin_action_state.pop(user_id, None)
                 await message.answer(
-                    f'✅ Промокод {state["code"]} создан: {float(state["amount"]):.2f} ₽, активаций {uses}',
+                    f'тЬЕ ╨Я╤А╨╛╨╝╨╛╨║╨╛╨┤ {state["code"]} ╤Б╨╛╨╖╨┤╨░╨╜: {float(state["amount"]):.2f} тВ╜, ╨░╨║╤В╨╕╨▓╨░╤Ж╨╕╨╣ {uses}',
                     reply_markup=admin_panel_kb(),
                 )
                 return
@@ -1561,15 +1506,15 @@ async def text_router(message: types.Message):
                 try:
                     order_id = int(text)
                 except ValueError:
-                    await message.answer('order_id должен быть числом. Введи снова:')
+                    await message.answer('order_id ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                     return
                 order = get_order(order_id)
                 if not order:
-                    await message.answer('Заказ не найден. Введи другой order_id:')
+                    await message.answer('╨Ч╨░╨║╨░╨╖ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜. ╨Т╨▓╨╡╨┤╨╕ ╨┤╤А╤Г╨│╨╛╨╣ order_id:')
                     return
                 state['order_id'] = str(order_id)
                 state['step'] = 'code'
-                await message.answer('Введи код для отправки пользователю:')
+                await message.answer('╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨┤ ╨┤╨╗╤П ╨╛╤В╨┐╤А╨░╨▓╨║╨╕ ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤О:')
                 return
             if step == 'code':
                 order_id = int(state['order_id'])
@@ -1577,17 +1522,17 @@ async def text_router(message: types.Message):
                 order = get_order(order_id)
                 if not order:
                     admin_action_state.pop(user_id, None)
-                    await message.answer('Заказ уже не найден.', reply_markup=admin_panel_kb())
+                    await message.answer('╨Ч╨░╨║╨░╨╖ ╤Г╨╢╨╡ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜.', reply_markup=admin_panel_kb())
                     return
                 _, target_user_id, _, _, _, status, _, _, _ = order
                 if status not in ('waiting_code', 'waiting_phone'):
                     admin_action_state.pop(user_id, None)
-                    await message.answer('Заказ не ожидает код.', reply_markup=admin_panel_kb())
+                    await message.answer('╨Ч╨░╨║╨░╨╖ ╨╜╨╡ ╨╛╨╢╨╕╨┤╨░╨╡╤В ╨║╨╛╨┤.', reply_markup=admin_panel_kb())
                     return
                 set_order_code(order_id, code)
                 admin_action_state.pop(user_id, None)
-                await message.answer('✅ Код отправлен клиенту.', reply_markup=admin_panel_kb())
-                await bot.send_message(target_user_id, f'Код для заказа #{order_id}: <code>{code}</code>')
+                await message.answer('тЬЕ ╨Ъ╨╛╨┤ ╨╛╤В╨┐╤А╨░╨▓╨╗╨╡╨╜ ╨║╨╗╨╕╨╡╨╜╤В╤Г.', reply_markup=admin_panel_kb())
+                await bot.send_message(target_user_id, f'╨Ъ╨╛╨┤ ╨┤╨╗╤П ╨╖╨░╨║╨░╨╖╨░ #{order_id}: <code>{code}</code>')
                 return
 
         if action in ('refill', 'set_stock'):
@@ -1595,28 +1540,28 @@ async def text_router(message: types.Message):
                 try:
                     product_id = int(text)
                 except ValueError:
-                    await message.answer('product_id должен быть числом. Введи снова:')
+                    await message.answer('product_id ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                     return
                 state['product_id'] = str(product_id)
                 state['step'] = 'qty'
                 if action == 'refill':
-                    await message.answer('Введи количество для добавления (+):')
+                    await message.answer('╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨┤╨╗╤П ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П (+):')
                 else:
-                    await message.answer('Введи итоговое количество на складе:')
+                    await message.answer('╨Т╨▓╨╡╨┤╨╕ ╨╕╤В╨╛╨│╨╛╨▓╨╛╨╡ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨╜╨░ ╤Б╨║╨╗╨░╨┤╨╡:')
                 return
             if step == 'qty':
                 try:
                     qty = int(text)
                 except ValueError:
-                    await message.answer('Количество должно быть целым числом. Введи снова:')
+                    await message.answer('╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨┤╨╛╨╗╨╢╨╜╨╛ ╨▒╤Л╤В╤М ╤Ж╨╡╨╗╤Л╨╝ ╤З╨╕╤Б╨╗╨╛╨╝. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                     return
                 product_id = int(state['product_id'])
                 if action == 'refill':
                     update_stock(product_id, qty)
-                    message_text = f'✅ Остаток товара #{product_id} пополнен на {qty}.'
+                    message_text = f'тЬЕ ╨Ю╤Б╤В╨░╤В╨╛╨║ ╤В╨╛╨▓╨░╤А╨░ #{product_id} ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜ ╨╜╨░ {qty}.'
                 else:
                     set_stock(product_id, qty)
-                    message_text = f'✅ Остаток товара #{product_id} установлен: {qty}.'
+                    message_text = f'тЬЕ ╨Ю╤Б╤В╨░╤В╨╛╨║ ╤В╨╛╨▓╨░╤А╨░ #{product_id} ╤Г╤Б╤В╨░╨╜╨╛╨▓╨╗╨╡╨╜: {qty}.'
                 admin_action_state.pop(user_id, None)
                 await message.answer(message_text, reply_markup=admin_panel_kb())
                 return
@@ -1625,15 +1570,15 @@ async def text_router(message: types.Message):
             try:
                 product_id = int(text)
             except ValueError:
-                await message.answer('product_id должен быть числом. Введи снова:')
+                await message.answer('product_id ╨┤╨╛╨╗╨╢╨╡╨╜ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:')
                 return
 
             deleted = deactivate_product(product_id)
             admin_action_state.pop(user_id, None)
             if deleted:
-                await message.answer(f'✅ Товар #{product_id} удален из каталога.', reply_markup=admin_panel_kb())
+                await message.answer(f'тЬЕ ╨в╨╛╨▓╨░╤А #{product_id} ╤Г╨┤╨░╨╗╨╡╨╜ ╨╕╨╖ ╨║╨░╤В╨░╨╗╨╛╨│╨░.', reply_markup=admin_panel_kb())
             else:
-                await message.answer('Товар не найден или уже удален.', reply_markup=admin_panel_kb())
+                await message.answer('╨в╨╛╨▓╨░╤А ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜ ╨╕╨╗╨╕ ╤Г╨╢╨╡ ╤Г╨┤╨░╨╗╨╡╨╜.', reply_markup=admin_panel_kb())
             return
 
     if is_admin(user_id) and user_id in admin_add_product_state:
@@ -1643,7 +1588,7 @@ async def text_router(message: types.Message):
         if step == 'title':
             state['title'] = text
             state['step'] = 'price'
-            await message.answer('Теперь введи цену (например: 8.8)', reply_markup=admin_step_kb())
+            await message.answer('╨в╨╡╨┐╨╡╤А╤М ╨▓╨▓╨╡╨┤╨╕ ╤Ж╨╡╨╜╤Г (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А: 8.8)', reply_markup=admin_step_kb())
             return
 
         if step == 'price':
@@ -1652,11 +1597,11 @@ async def text_router(message: types.Message):
                 if price <= 0:
                     raise ValueError
             except ValueError:
-                await message.answer('Цена должна быть числом больше 0. Введи снова:', reply_markup=admin_step_kb())
+                await message.answer('╨ж╨╡╨╜╨░ ╨┤╨╛╨╗╨╢╨╜╨░ ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨╛╨╝ ╨▒╨╛╨╗╤М╤И╨╡ 0. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:', reply_markup=admin_step_kb())
                 return
             state['price'] = str(price)
             state['step'] = 'stock'
-            await message.answer('Введи количество на складе (stock):', reply_markup=admin_step_kb())
+            await message.answer('╨Т╨▓╨╡╨┤╨╕ ╨║╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨╜╨░ ╤Б╨║╨╗╨░╨┤╨╡ (stock):', reply_markup=admin_step_kb())
             return
 
         if step == 'stock':
@@ -1665,24 +1610,24 @@ async def text_router(message: types.Message):
                 if stock < 0:
                     raise ValueError
             except ValueError:
-                await message.answer('Количество должно быть целым числом 0 или больше. Введи снова:', reply_markup=admin_step_kb())
+                await message.answer('╨Ъ╨╛╨╗╨╕╤З╨╡╤Б╤В╨▓╨╛ ╨┤╨╛╨╗╨╢╨╜╨╛ ╨▒╤Л╤В╤М ╤Ж╨╡╨╗╤Л╨╝ ╤З╨╕╤Б╨╗╨╛╨╝ 0 ╨╕╨╗╨╕ ╨▒╨╛╨╗╤М╤И╨╡. ╨Т╨▓╨╡╨┤╨╕ ╤Б╨╜╨╛╨▓╨░:', reply_markup=admin_step_kb())
                 return
             state['stock'] = str(stock)
             state['step'] = 'credentials'
-            await message.answer('Введи данные товара (логин:пароль / прокси / номер и т.д.):', reply_markup=admin_step_kb())
+            await message.answer('╨Т╨▓╨╡╨┤╨╕ ╨┤╨░╨╜╨╜╤Л╨╡ ╤В╨╛╨▓╨░╤А╨░ (╨╗╨╛╨│╨╕╨╜:╨┐╨░╤А╨╛╨╗╤М / ╨┐╤А╨╛╨║╤Б╨╕ / ╨╜╨╛╨╝╨╡╤А ╨╕ ╤В.╨┤.):', reply_markup=admin_step_kb())
             return
 
         if step == 'credentials':
             state['credentials'] = text
             state['step'] = 'description'
-            await message.answer('Введи описание товара:', reply_markup=admin_step_kb())
+            await message.answer('╨Т╨▓╨╡╨┤╨╕ ╨╛╨┐╨╕╤Б╨░╨╜╨╕╨╡ ╤В╨╛╨▓╨░╤А╨░:', reply_markup=admin_step_kb())
             return
 
         if step == 'description':
             state['description'] = text
             state['step'] = 'auto_restock'
             await message.answer(
-                'Включить автопополнение склада?\nЕсли включить, склад будет увеличиваться на +1 каждые 30 секунд.',
+                '╨Т╨║╨╗╤О╤З╨╕╤В╤М ╨░╨▓╤В╨╛╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ ╤Б╨║╨╗╨░╨┤╨░?\n╨Х╤Б╨╗╨╕ ╨▓╨║╨╗╤О╤З╨╕╤В╤М, ╤Б╨║╨╗╨░╨┤ ╨▒╤Г╨┤╨╡╤В ╤Г╨▓╨╡╨╗╨╕╤З╨╕╨▓╨░╤В╤М╤Б╤П ╨╜╨░ +1 ╨║╨░╨╢╨┤╤Л╨╡ 30 ╤Б╨╡╨║╤Г╨╜╨┤.',
                 reply_markup=admin_auto_restock_kb(),
             )
             return
@@ -1692,9 +1637,9 @@ async def text_router(message: types.Message):
         ok, msg, amount = activate_promo(user_id, text)
         if ok:
             bal = get_balance(user_id)
-            await message.answer(f'✅ {msg}\nНачислено: {amount:.2f} ₽\nТекущий баланс: {bal:.2f} ₽', reply_markup=main_menu_kb(user_id))
+            await message.answer(f'тЬЕ {msg}\n╨Э╨░╤З╨╕╤Б╨╗╨╡╨╜╨╛: {amount:.2f} тВ╜\n╨в╨╡╨║╤Г╤Й╨╕╨╣ ╨▒╨░╨╗╨░╨╜╤Б: {bal:.2f} тВ╜', reply_markup=main_menu_kb(user_id))
         else:
-            await message.answer(f'❌ {msg}', reply_markup=main_menu_kb(user_id))
+            await message.answer(f'тЭМ {msg}', reply_markup=main_menu_kb(user_id))
         return
 
     if user_id in pending_custom_topup:
@@ -1703,22 +1648,22 @@ async def text_router(message: types.Message):
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            await message.answer('Введите корректную сумму числом.')
+            await message.answer('╨Т╨▓╨╡╨┤╨╕╤В╨╡ ╨║╨╛╤А╤А╨╡╨║╤В╨╜╤Г╤О ╤Б╤Г╨╝╨╝╤Г ╤З╨╕╤Б╨╗╨╛╨╝.')
             return
 
         pending_custom_topup.discard(user_id)
         topup_id = create_topup(user_id, amount, '')
-        payment_link, payment_id = create_topup_payment(amount, user_id, topup_id)
+        payment_link, payment_id = create_funpay_payment(amount, user_id, topup_id)
         set_topup_payment_data(topup_id, payment_link, payment_id)
         if payment_id:
             set_topup_external_status(topup_id, 'created')
 
         await message.answer(
-            f'Заявка на пополнение #{topup_id} создана на {amount:.2f} ₽\n'
-            f'1) Оплатите товар по ссылке: {payment_link}\n'
-            f'2) В комментарии к заказу укажите код: <code>topup_{topup_id}_{user_id}</code>\n'
-            f'3) Сумма оплаты должна быть: {amount:.2f} ₽\n'
-            'После оплаты баланс подтвердится автоматически (или админом, если API недоступен).',
+            f'╨Ч╨░╤П╨▓╨║╨░ ╨╜╨░ ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ #{topup_id} ╤Б╨╛╨╖╨┤╨░╨╜╨░ ╨╜╨░ {amount:.2f} тВ╜\n'
+            f'1) ╨Ю╨┐╨╗╨░╤В╨╕╤В╨╡ ╤В╨╛╨▓╨░╤А ╨┐╨╛ ╤Б╤Б╤Л╨╗╨║╨╡: {payment_link}\n'
+            f'2) ╨Т ╨║╨╛╨╝╨╝╨╡╨╜╤В╨░╤А╨╕╨╕ ╨║ ╨╖╨░╨║╨░╨╖╤Г ╤Г╨║╨░╨╢╨╕╤В╨╡ ╨║╨╛╨┤: <code>topup_{topup_id}_{user_id}</code>\n'
+            f'3) ╨б╤Г╨╝╨╝╨░ ╨╛╨┐╨╗╨░╤В╤Л ╨┤╨╛╨╗╨╢╨╜╨░ ╨▒╤Л╤В╤М: {amount:.2f} тВ╜\n'
+            '╨Я╨╛╤Б╨╗╨╡ ╨╛╨┐╨╗╨░╤В╤Л ╨▒╨░╨╗╨░╨╜╤Б ╨┐╨╛╨┤╤В╨▓╨╡╤А╨┤╨╕╤В╤Б╤П ╨░╨▓╤В╨╛╨╝╨░╤В╨╕╤З╨╡╤Б╨║╨╕ (╨╕╨╗╨╕ ╨░╨┤╨╝╨╕╨╜╨╛╨╝, ╨╡╤Б╨╗╨╕ API ╨╜╨╡╨┤╨╛╤Б╤В╤Г╨┐╨╡╨╜).',
             reply_markup=main_menu_kb(user_id),
         )
 
@@ -1726,11 +1671,11 @@ async def text_router(message: types.Message):
             try:
                 await bot.send_message(
                     admin_id,
-                    f'Новая заявка на пополнение #{topup_id}\n'
-                    f'Пользователь: {user_id}\n'
-                    f'Сумма: {amount:.2f} ₽\n'
+                    f'╨Э╨╛╨▓╨░╤П ╨╖╨░╤П╨▓╨║╨░ ╨╜╨░ ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ #{topup_id}\n'
+                    f'╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М: {user_id}\n'
+                    f'╨б╤Г╨╝╨╝╨░: {amount:.2f} тВ╜\n'
                     f'payment_id: {payment_id or "-"}\n'
-                    f'Подтвердить: /confirmtopup {topup_id}',
+                    f'╨Я╨╛╨┤╤В╨▓╨╡╤А╨┤╨╕╤В╤М: /confirmtopup {topup_id}',
                 )
             except Exception:
                 pass
@@ -1747,12 +1692,12 @@ async def text_router(message: types.Message):
             product = get_product(int(product_id))
             if product:
                 product_data = format_delivery_credentials(str(product[4] or ''), int(qty))
-        safe_product_data = html.escape(product_data) if product_data else 'не указаны'
+        safe_product_data = html.escape(product_data) if product_data else '╨╜╨╡ ╤Г╨║╨░╨╖╨░╨╜╤Л'
 
         await message.answer(
-            f'Номер сохранён для заказа #{order_id}.\n'
-            f'Данные товара для входа: <code>{safe_product_data}</code>\n'
-            'Нажмите кнопку «Получить код для входа», чтобы отправить запрос администратору.',
+            f'╨Э╨╛╨╝╨╡╤А ╤Б╨╛╤Е╤А╨░╨╜╤С╨╜ ╨┤╨╗╤П ╨╖╨░╨║╨░╨╖╨░ #{order_id}.\n'
+            f'╨Ф╨░╨╜╨╜╤Л╨╡ ╤В╨╛╨▓╨░╤А╨░ ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░: <code>{safe_product_data}</code>\n'
+            '╨Э╨░╨╢╨╝╨╕╤В╨╡ ╨║╨╜╨╛╨┐╨║╤Г ┬л╨Я╨╛╨╗╤Г╤З╨╕╤В╤М ╨║╨╛╨┤ ╨┤╨╗╤П ╨▓╤Е╨╛╨┤╨░┬╗, ╤З╤В╨╛╨▒╤Л ╨╛╤В╨┐╤А╨░╨▓╨╕╤В╤М ╨╖╨░╨┐╤А╨╛╤Б ╨░╨┤╨╝╨╕╨╜╨╕╤Б╤В╤А╨░╤В╨╛╤А╤Г.',
             reply_markup=user_get_code_kb(order_id),
         )
         return
@@ -1763,8 +1708,8 @@ async def cmd_admin(message: types.Message):
     if not is_admin(message.from_user.id):
         return
     await message.reply(
-        'Админ команды:\n'
-        '/adminpanel — мастер добавления товара\n'
+        '╨Р╨┤╨╝╨╕╨╜ ╨║╨╛╨╝╨░╨╜╨┤╤Л:\n'
+        '/adminpanel тАФ ╨╝╨░╤Б╤В╨╡╤А ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜╨╕╤П ╤В╨╛╨▓╨░╤А╨░\n'
         '/addproduct category|title|price|stock|credentials|description\n'
         '/refill <product_id> <qty>\n'
         '/setstock <product_id> <qty>\n'
@@ -1778,22 +1723,22 @@ async def cmd_admin(message: types.Message):
 @dp.message_handler(commands=['adminpanel'])
 async def cmd_adminpanel(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
     admin_add_product_state.pop(message.from_user.id, None)
     admin_action_state.pop(message.from_user.id, None)
-    await message.reply('Панель админа: выбери действие', reply_markup=admin_panel_kb())
+    await message.reply('╨Я╨░╨╜╨╡╨╗╤М ╨░╨┤╨╝╨╕╨╜╨░: ╨▓╤Л╨▒╨╡╤А╨╕ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╨╡', reply_markup=admin_panel_kb())
 
 
 @dp.message_handler(commands=['addproduct'])
 async def cmd_addproduct(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
 
     parts = message.get_args().split('|')
     if len(parts) < 6:
-        await message.reply('Формат: /addproduct category|title|price|stock|credentials|description')
+        await message.reply('╨д╨╛╤А╨╝╨░╤В: /addproduct category|title|price|stock|credentials|description')
         return
 
     category = parts[0].strip().lower()
@@ -1802,93 +1747,93 @@ async def cmd_addproduct(message: types.Message):
         price = float(parts[2].strip().replace(',', '.'))
         stock = int(parts[3].strip())
     except ValueError:
-        await message.reply('price и stock должны быть числами')
+        await message.reply('price ╨╕ stock ╨┤╨╛╨╗╨╢╨╜╤Л ╨▒╤Л╤В╤М ╤З╨╕╤Б╨╗╨░╨╝╨╕')
         return
 
     credentials = parts[4].strip()
     description = parts[5].strip()
 
     if category not in CATEGORY_NAMES:
-        await message.reply('Категории: proxy, tg, email')
+        await message.reply('╨Ъ╨░╤В╨╡╨│╨╛╤А╨╕╨╕: proxy, tg, email')
         return
 
     product_id = add_product(title, price, credentials, category, description, stock, auto_restock=0)
-    await message.reply(f'Товар добавлен, id={product_id}')
+    await message.reply(f'╨в╨╛╨▓╨░╤А ╨┤╨╛╨▒╨░╨▓╨╗╨╡╨╜, id={product_id}')
 
 
 @dp.message_handler(commands=['refill'])
 async def cmd_refill(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
 
     parts = message.get_args().split()
     if len(parts) != 2:
-        await message.reply('Формат: /refill <product_id> <qty>')
+        await message.reply('╨д╨╛╤А╨╝╨░╤В: /refill <product_id> <qty>')
         return
 
     try:
         product_id = int(parts[0])
         qty = int(parts[1])
     except ValueError:
-        await message.reply('Неверный формат')
+        await message.reply('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В')
         return
 
     update_stock(product_id, qty)
-    await message.reply('Остаток обновлен')
+    await message.reply('╨Ю╤Б╤В╨░╤В╨╛╨║ ╨╛╨▒╨╜╨╛╨▓╨╗╨╡╨╜')
 
 
 @dp.message_handler(commands=['setstock'])
 async def cmd_setstock(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
 
     parts = message.get_args().split()
     if len(parts) != 2:
-        await message.reply('Формат: /setstock <product_id> <qty>')
+        await message.reply('╨д╨╛╤А╨╝╨░╤В: /setstock <product_id> <qty>')
         return
 
     try:
         product_id = int(parts[0])
         qty = int(parts[1])
     except ValueError:
-        await message.reply('Неверный формат')
+        await message.reply('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В')
         return
 
     set_stock(product_id, qty)
-    await message.reply('Остаток установлен')
+    await message.reply('╨Ю╤Б╤В╨░╤В╨╛╨║ ╤Г╤Б╤В╨░╨╜╨╛╨▓╨╗╨╡╨╜')
 
 
 @dp.message_handler(commands=['confirmtopup'])
 async def cmd_confirm_topup(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
 
     args = message.get_args().strip()
     if not args:
-        await message.reply('Формат: /confirmtopup <topup_id>')
+        await message.reply('╨д╨╛╤А╨╝╨░╤В: /confirmtopup <topup_id>')
         return
 
     try:
         topup_id = int(args)
     except ValueError:
-        await message.reply('Неверный id')
+        await message.reply('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ id')
         return
 
     result = confirm_topup(topup_id)
     if not result:
-        await message.reply('Заявка не найдена')
+        await message.reply('╨Ч╨░╤П╨▓╨║╨░ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜╨░')
         return
 
     _, user_id, amount, status = result
-    await message.reply(f'Пополнение #{topup_id} подтверждено: {amount:.2f} ₽')
+    await message.reply(f'╨Я╨╛╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╡ #{topup_id} ╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╛: {amount:.2f} тВ╜')
     try:
         balance = get_balance(user_id)
         await bot.send_message(
             user_id,
-            f'✅ Ваш баланс пополнен на {float(amount):.2f} ₽.\nТекущий баланс: {balance:.2f} ₽',
+            f'тЬЕ ╨Т╨░╤И ╨▒╨░╨╗╨░╨╜╤Б ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜ ╨╜╨░ {float(amount):.2f} тВ╜.\n╨в╨╡╨║╤Г╤Й╨╕╨╣ ╨▒╨░╨╗╨░╨╜╤Б: {balance:.2f} тВ╜',
         )
     except Exception:
         pass
@@ -1897,12 +1842,12 @@ async def cmd_confirm_topup(message: types.Message):
 @dp.message_handler(commands=['createpromo'])
 async def cmd_createpromo(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
 
     parts = message.get_args().split()
     if len(parts) != 3:
-        await message.reply('Формат: /createpromo <CODE> <amount> <uses>')
+        await message.reply('╨д╨╛╤А╨╝╨░╤В: /createpromo <CODE> <amount> <uses>')
         return
 
     code = parts[0].upper()
@@ -1910,67 +1855,67 @@ async def cmd_createpromo(message: types.Message):
         amount = float(parts[1].replace(',', '.'))
         uses = int(parts[2])
     except ValueError:
-        await message.reply('Неверный формат amount/uses')
+        await message.reply('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В amount/uses')
         return
 
     create_promo(code, amount, uses)
-    await message.reply(f'Промокод {code} создан: {amount:.2f} ₽, активаций {uses}')
+    await message.reply(f'╨Я╤А╨╛╨╝╨╛╨║╨╛╨┤ {code} ╤Б╨╛╨╖╨┤╨░╨╜: {amount:.2f} тВ╜, ╨░╨║╤В╨╕╨▓╨░╤Ж╨╕╨╣ {uses}')
 
 
 @dp.message_handler(commands=['sendcode'])
 async def cmd_sendcode(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
 
     parts = message.get_args().split(maxsplit=1)
     if len(parts) != 2:
-        await message.reply('Формат: /sendcode <order_id> <code>')
+        await message.reply('╨д╨╛╤А╨╝╨░╤В: /sendcode <order_id> <code>')
         return
 
     try:
         order_id = int(parts[0])
     except ValueError:
-        await message.reply('Неверный order_id')
+        await message.reply('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ order_id')
         return
 
     code = parts[1].strip()
     order = get_order(order_id)
     if not order:
-        await message.reply('Заказ не найден')
+        await message.reply('╨Ч╨░╨║╨░╨╖ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜')
         return
 
     _, user_id, _, _, _, status, _, _, _ = order
     if status not in ('waiting_code', 'waiting_phone'):
-        await message.reply('Заказ не ожидает код')
+        await message.reply('╨Ч╨░╨║╨░╨╖ ╨╜╨╡ ╨╛╨╢╨╕╨┤╨░╨╡╤В ╨║╨╛╨┤')
         return
 
     set_order_code(order_id, code)
-    await message.reply('Код отправлен клиенту')
-    await bot.send_message(user_id, f'Код для заказа #{order_id}: <code>{code}</code>')
+    await message.reply('╨Ъ╨╛╨┤ ╨╛╤В╨┐╤А╨░╨▓╨╗╨╡╨╜ ╨║╨╗╨╕╨╡╨╜╤В╤Г')
+    await bot.send_message(user_id, f'╨Ъ╨╛╨┤ ╨┤╨╗╤П ╨╖╨░╨║╨░╨╖╨░ #{order_id}: <code>{code}</code>')
 
 
 @dp.message_handler(commands=['addbalance'])
 async def cmd_addbalance(message: types.Message):
     if not is_admin(message.from_user.id):
-        await message.reply('Только админ')
+        await message.reply('╨в╨╛╨╗╤М╨║╨╛ ╨░╨┤╨╝╨╕╨╜')
         return
 
     parts = message.get_args().split()
     if len(parts) != 2:
-        await message.reply('Формат: /addbalance <user_id> <amount>')
+        await message.reply('╨д╨╛╤А╨╝╨░╤В: /addbalance <user_id> <amount>')
         return
 
     try:
         user_id = int(parts[0])
         amount = float(parts[1].replace(',', '.'))
     except ValueError:
-        await message.reply('Неверный формат')
+        await message.reply('╨Э╨╡╨▓╨╡╤А╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В')
         return
 
     change_balance(user_id, amount)
     bal = get_balance(user_id)
-    await message.reply(f'Баланс пользователя {user_id} изменен на {amount:.2f} ₽. Текущий: {bal:.2f} ₽')
+    await message.reply(f'╨С╨░╨╗╨░╨╜╤Б ╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤П {user_id} ╨╕╨╖╨╝╨╡╨╜╨╡╨╜ ╨╜╨░ {amount:.2f} тВ╜. ╨в╨╡╨║╤Г╤Й╨╕╨╣: {bal:.2f} тВ╜')
 
 
 async def restock_worker() -> None:
@@ -1987,10 +1932,6 @@ async def restock_worker() -> None:
 async def auto_confirm_funpay_worker() -> None:
     global funpay_events_queue
     global funpay_listener_started
-
-    if TOPUP_PROVIDER != 'funpay':
-        logging.info('FunPay auto-confirm disabled: TOPUP_PROVIDER=%s', TOPUP_PROVIDER)
-        return
 
     if not FUNPAY_GOLDEN_KEY:
         logging.info('FunPay auto-confirm disabled: set FUNPAY_GOLDEN_KEY')
@@ -2063,8 +2004,8 @@ async def auto_confirm_funpay_worker() -> None:
             try:
                 await bot.send_message(
                     int(confirmed_user_id),
-                    f'✅ Ваш баланс пополнен на {float(credited_amount):.2f} ₽.\n'
-                    f'Текущий баланс: {balance:.2f} ₽',
+                    f'тЬЕ ╨Т╨░╤И ╨▒╨░╨╗╨░╨╜╤Б ╨┐╨╛╨┐╨╛╨╗╨╜╨╡╨╜ ╨╜╨░ {float(credited_amount):.2f} тВ╜.\n'
+                    f'╨в╨╡╨║╤Г╤Й╨╕╨╣ ╨▒╨░╨╗╨░╨╜╤Б: {balance:.2f} тВ╜',
                 )
             except Exception:
                 pass
@@ -2073,7 +2014,7 @@ async def auto_confirm_funpay_worker() -> None:
                 try:
                     await bot.send_message(
                         admin_id,
-                        f'Автоподтверждение FunPay: topup #{topup_id}, user={confirmed_user_id}, amount={float(credited_amount):.2f} ₽',
+                        f'╨Р╨▓╤В╨╛╨┐╨╛╨┤╤В╨▓╨╡╤А╨╢╨┤╨╡╨╜╨╕╨╡ FunPay: topup #{topup_id}, user={confirmed_user_id}, amount={float(credited_amount):.2f} тВ╜',
                     )
                 except Exception:
                     pass
