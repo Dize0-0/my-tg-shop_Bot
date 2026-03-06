@@ -1319,6 +1319,18 @@ async def text_router(message: types.Message):
     user_id = message.from_user.id
     text = (message.text or '').strip()
 
+    # Fallback for clients/buttons that send plain text instead of command entity.
+    lower_text = text.lower()
+    if lower_text in {'старт', 'start'} or lower_text.startswith('/start'):
+        pending_custom_qty_input.pop(user_id, None)
+        pending_custom_topup.discard(user_id)
+        pending_promo_input.discard(user_id)
+        pending_tg_phone_order.pop(user_id, None)
+        admin_action_state.pop(user_id, None)
+        admin_add_product_state.pop(user_id, None)
+        await show_main_menu(user_id, 'Главное меню:')
+        return
+
     if user_id in pending_custom_qty_input:
         pending_data = pending_custom_qty_input[user_id]
         try:
