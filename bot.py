@@ -71,8 +71,11 @@ except Exception:
 
 logging.basicConfig(level=logging.INFO)
 
+BASE_DIR_PATH = Path(__file__).resolve().parent
+BASE_DIR = str(BASE_DIR_PATH)
+
 # Bot instance lock file to prevent multiple simultaneous runs
-LOCK_FILE = Path(__file__).parent / 'bot.lock'
+LOCK_FILE = BASE_DIR_PATH / 'bot.lock'
 
 
 def acquire_lock():
@@ -127,7 +130,7 @@ def load_local_env_file(file_path: str = '.env') -> None:
 
 
 load_local_env_file('.env')
-load_local_env_file('.env.example')
+load_local_env_file(str(BASE_DIR_PATH / '.env'))
 
 
 def env_or_default(key: str, default: str) -> str:
@@ -164,12 +167,20 @@ def env_bool_or_default(key: str, default: bool) -> bool:
         return default
     return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
 
-API_TOKEN = os.getenv('TG_BOT_TOKEN', '').strip()
+def get_bot_token() -> str:
+    for key in ('TG_BOT_TOKEN', 'TELEGRAM_BOT_TOKEN', 'BOT_TOKEN'):
+        value = os.getenv(key, '').strip().strip('"').strip("'")
+        if value:
+            return value
+    return ''
+
+
+API_TOKEN = get_bot_token()
 if not API_TOKEN or API_TOKEN.upper() in {'YOUR_BOT_TOKEN', 'CHANGE_ME'} or ':' not in API_TOKEN:
     raise RuntimeError(
-        'Invalid TG_BOT_TOKEN. Set a valid bot token in environment variables (or .env file).'
+        'Invalid TG_BOT_TOKEN. Set a valid token in TG_BOT_TOKEN (or TELEGRAM_BOT_TOKEN/BOT_TOKEN) '
+        f'in environment variables or in {BASE_DIR}/.env.'
     )
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ADMIN_IDS: Set[int] = set(
     int(value.strip())
     for value in os.getenv('ADMIN_IDS', '8594771951,8466199706').split(',')
