@@ -1,108 +1,44 @@
 ﻿
-
+# Функция для массовой рассылки всем пользователям
+async def broadcast_message_to_all_users(message: str):
+    from db import _connect
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute('SELECT user_id FROM users')
+    user_ids = [row['user_id'] for row in cur.fetchall()]
+    conn.close()
+    sent = 0
+    for user_id in user_ids:
+        try:
+            await bot.send_message(user_id, message)
+            sent += 1
+        except Exception as e:
+            logging.warning(f"Не удалось отправить сообщение {user_id}: {e}")
+    return sent
+from aiogram import Router
 
 import asyncio
 import atexit
 import base64
 import datetime
 import hashlib
-import os
-import threading
-import logging
 import html
 import json
-from urllib.parse import quote
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
-from typing import Any, Optional, Set, Dict
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-# --- Вспомогательные переменные и объекты для запуска ---
+import logging
+import os
 import re
-topup_marker_re = re.compile(r"topup_(\\d+)_(\\d+)")
-funpay_enums = None
-FUNPAY_API_AVAILABLE = False
-class FunPayAccount:
-    def __init__(self, key): pass
-    def get(self): return None
-class FunPayRunner:
-    def __init__(self, account): pass
-    def listen(self, requests_delay): return []
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-API_TOKEN = os.getenv('TG_BOT_TOKEN', 'YOUR_BOT_TOKEN')
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
-admin_action_state = {}
-admin_add_product_state = {}
-pending_custom_qty_input = {}
-pending_review_input = {}
-pending_promo_input = set()
-pending_custom_topup = set()
-active_buy_users = set()
-pending_tg_phone_order = {}
+import sys
+import threading
+from pathlib import Path
+from urllib.parse import quote, urlencode
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
+from typing import Any, Dict, Optional, Set
 
-# Заглушки для функций, которые должны быть реализованы в проекте
-def env_or_default(key, default):
-    return os.getenv(key, default)
-def build_main_menu_text(user_id, text):
-    return text
-def main_menu_kb(user_id):
-    return InlineKeyboardMarkup()
-def catalog_kb():
-    return InlineKeyboardMarkup()
-def profile_kb():
-    return InlineKeyboardMarkup()
-def back_to_main_kb():
-    return InlineKeyboardMarkup()
-def update_stock(product_id, qty):
-    pass
-def try_spend_balance(user_id, total):
-    return True
-def set_topup_payment_data(topup_id, payment_link, payment_id):
-    pass
-def set_topup_external_status(topup_id, status):
-    pass
-def get_catalog_products(category):
-    return []
-def category_products_kb(category, page=0):
-    return InlineKeyboardMarkup()
-def category_products_text(category, page=0):
-    return ""
-def reviews_nav_kb(page, total_count):
-    return InlineKeyboardMarkup()
-def quantity_kb(product_id, catalog_key, stock, page=0):
-    return InlineKeyboardMarkup()
-def set_order_status(order_id, status):
-    pass
-def build_profile_hub_text(user_id):
-    return ""
-def proxy_sections_kb():
-    return InlineKeyboardMarkup()
-def release_lock():
-    pass
-REVIEWS_PHOTO_URL_2 = os.getenv('REVIEWS_PHOTO_URL_2', 'https://i.postimg.cc/wMyfFw4J/EB328F27-0B7A-4338-A923-2BF9D774A300.png')
-WEB_SHOP_URL = os.getenv('WEB_SHOP_URL', '').strip()
-AGREEMENT_TEXT = 'Пользовательское соглашение...'
-CATEGORY_NAMES = {
-    'proxy': '🌐 Прокси',
-    'tg': '🤖 TG аккаунты',
-    'email': '✉️ Почты',
-}
-CATALOG_VIEW_NAMES = {
-    'proxy': '🌐 Прокси',
-    'proxy_de': '🇩🇪 Прокси Германия',
-    'proxy_us': '🇺🇸 Прокси США',
-    'tg': '🤖 TG аккаунты',
-    'email': '✉️ Почты',
-}
-PRODUCTS_PAGE_SIZE = 5
-REVIEW_REWARD_RUB = 1.0
-REVIEWS_PAGE_SIZE = 3
-
-
-
-
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.enums import ParseMode
+# executor не нужен в aiogram 3.x
 
 from db import (
     activate_promo,
@@ -137,7 +73,98 @@ from db import (
     set_order_phone,
     set_order_status,
     set_stock,
+    set_topup_payment_data,
+    set_topup_external_status,
+    try_spend_balance,
+    update_stock,
 )
+
+try:
+    from FunPayAPI import Account as FunPayAccount, Runner as FunPayRunner, enums as funpay_enums
+    FUNPAY_API_AVAILABLE = True
+except Exception:
+    FunPayAccount = None
+    FunPayRunner = None
+    funpay_enums = None
+    FUNPAY_API_AVAILABLE = False
+
+logging.basicConfig(level=logging.INFO)
+
+BASE_DIR_PATH = Path(__file__).resolve().parent
+BASE_DIR = str(BASE_DIR_PATH)
+
+
+# Bot instance lock file to prevent multiple simultaneous runs
+LOCK_FILE = BASE_DIR_PATH / 'bot.lock'
+
+
+
+
+
+
+
+def acquire_lock():
+    if LOCK_FILE.exists():
+        try:
+            with open(LOCK_FILE, 'r') as f:
+                old_pid = f.read().strip()
+            logging.warning(f'Lock file exists (PID: {old_pid}). Attempting cleanup...')
+            LOCK_FILE.unlink()
+        except Exception as e:
+            logging.error(f'Failed to remove stale lock: {e}')
+    
+    try:
+        with open(LOCK_FILE, 'w') as f:
+            f.write(str(os.getpid()))
+        logging.info(f'Lock acquired: PID {os.getpid()}')
+    except Exception as e:
+        logging.error(f'Failed to create lock file: {e}')
+        sys.exit(1)
+
+
+def release_lock():
+    try:
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+            logging.info('Lock released')
+    except Exception as e:
+        logging.error(f'Failed to release lock: {e}')
+
+
+atexit.register(release_lock)
+
+
+def load_local_env_file(file_path: str = '.env') -> None:
+    if not os.path.exists(file_path):
+        return
+    try:
+        with open(file_path, 'r', encoding='utf-8') as env_file:
+            for raw_line in env_file:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key == 'TG_BOT_TOKEN' and value.upper() in {'YOUR_BOT_TOKEN', 'CHANGE_ME', ''}:
+                    continue
+                if key:
+                    os.environ.setdefault(key, value)
+    except Exception as error:
+        logging.warning('Failed to read .env file: %s', error)
+
+
+load_local_env_file('.env')
+load_local_env_file(str(BASE_DIR_PATH / '.env'))
+
+
+def env_or_default(key: str, default: str) -> str:
+    value = os.getenv(key)
+    if value is None:
+        return default
+    stripped = value.strip()
+    return stripped if stripped else default
+
 
 def env_int_or_default(key: str, default: int) -> int:
     raw = os.getenv(key)
@@ -165,10 +192,20 @@ def env_bool_or_default(key: str, default: bool) -> bool:
         return default
     return raw.strip().lower() in {'1', 'true', 'yes', 'on'}
 
+def get_bot_token() -> str:
+    for key in ('TG_BOT_TOKEN', 'TELEGRAM_BOT_TOKEN', 'BOT_TOKEN'):
+        value = os.getenv(key, '').strip().strip('"').strip("'")
+        if value:
+            return value
+    return ''
 
 
-
-
+API_TOKEN = get_bot_token()
+if not API_TOKEN or API_TOKEN.upper() in {'YOUR_BOT_TOKEN', 'CHANGE_ME'} or ':' not in API_TOKEN:
+    raise RuntimeError(
+        'Invalid TG_BOT_TOKEN. Set a valid token in TG_BOT_TOKEN (or TELEGRAM_BOT_TOKEN/BOT_TOKEN) '
+        f'in environment variables or in {BASE_DIR}/.env.'
+    )
 ADMIN_IDS: Set[int] = set(
     int(value.strip())
     for value in os.getenv('ADMIN_IDS', '8594771951,8466199706').split(',')
@@ -258,12 +295,31 @@ PRODUCTS_PAGE_SIZE = 5
 REVIEW_REWARD_RUB = 1.0
 REVIEWS_PAGE_SIZE = 3
 
+from aiogram.client.default import DefaultBotProperties
+bot = Bot(
+    token=API_TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
+dp = Dispatcher()
 
 init_db()
 seed_products()
 
+# --- Router для aiogram 3.x ---
+router = Router()
+dp.include_router(router)
 
-
+pending_promo_input: Set[int] = set()
+pending_custom_topup: Set[int] = set()
+pending_tg_phone_order: Dict[int, int] = {}
+pending_custom_qty_input: Dict[int, Dict[str, int]] = {}
+pending_review_input: Dict[int, Dict[str, int]] = {}
+admin_add_product_state: Dict[int, Dict[str, str]] = {}
+admin_action_state: Dict[int, Dict[str, str]] = {}
+active_buy_users: Set[int] = set()
+funpay_events_queue: Optional[asyncio.Queue] = None
+funpay_listener_started = False
+topup_marker_re = re.compile(r'topup_(\d+)_(\d+)', re.IGNORECASE)
 
 
 def payment_provider_label() -> str:
@@ -401,7 +457,59 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
+def build_main_menu_text(user_id: int, intro_text: str = '') -> str:
+    balance = get_balance(user_id)
 
+    proxy_items = get_catalog_products('proxy')
+    tg_items = get_catalog_products('tg')
+    email_items = get_catalog_products('email')
+    proxy_de_stock = get_catalog_stock_units('proxy_de')
+    proxy_us_stock = get_catalog_stock_units('proxy_us')
+    tg_stock = get_catalog_stock_units('tg')
+    email_stock = get_catalog_stock_units('email')
+    total_positions = len(proxy_items) + len(tg_items) + len(email_items)
+    total_stock = 0
+    for row in proxy_items + tg_items + email_items:
+        try:
+            total_stock += int(row[4])
+        except Exception:
+            continue
+
+    section_lines: list[str] = []
+    if proxy_de_stock > 0:
+        section_lines.append(f'Прокси Германия | <b>{proxy_de_stock}</b>')
+    if proxy_us_stock > 0:
+        section_lines.append(f'Прокси США | <b>{proxy_us_stock}</b>')
+    if tg_stock > 0:
+        section_lines.append(f'TG аккаунты | <b>{tg_stock}</b>')
+    if email_stock > 0:
+        section_lines.append(f'Почты | <b>{email_stock}</b>')
+
+    if section_lines:
+        box_rows = ['╭──── Доступно сейчас']
+        for idx, line in enumerate(section_lines):
+            prefix = '╰' if idx == len(section_lines) - 1 else '├'
+            box_rows.append(f'{prefix} ⬅️ {line}')
+        sections_text = '\n'.join(box_rows) + '\n\n'
+    else:
+        sections_text = ''
+
+    header = intro_text.strip()
+    if not header or header == 'Главное меню:':
+        header = '✨ <b>Lune Shop</b>'
+
+    site_line = ''
+    if WEB_SHOP_URL.startswith('http'):
+        safe_url = html.escape(WEB_SHOP_URL, quote=True)
+        site_line = f'\n\n🌐 Сайт: <a href="{safe_url}">Открыть магазин</a>'
+
+    return (
+        f'{header}\n\n'
+        f'💎 Баланс: <b>{balance:.2f} ₽</b>\n'
+        f'📦 В наличии: <b>{total_positions}</b> позиций / <b>{total_stock}</b> шт.\n\n'
+        f'{sections_text}'
+        f'⚡ Выберите действие:{site_line}'
+    )
 
 
 def _filter_proxy_products_by_region(region_key: str) -> list[tuple]:
@@ -423,6 +531,185 @@ def _filter_proxy_products_by_region(region_key: str) -> list[tuple]:
         if region_key == 'proxy_us' and '[proxy_region:us]' in description:
             filtered.append(row)
             continue
+        full_text = f'{title} {description}'
+        if any(token in full_text for token in region_tokens):
+            filtered.append(row)
+    return filtered
+
+
+def get_catalog_products(catalog_key: str) -> list[tuple]:
+    if catalog_key in {'proxy_de', 'proxy_us'}:
+        return _filter_proxy_products_by_region(catalog_key)
+    if catalog_key in CATEGORY_NAMES:
+        return list_products(catalog_key)
+    return []
+
+
+def get_catalog_stock_units(catalog_key: str) -> int:
+    rows = get_catalog_products(catalog_key)
+    total = 0
+    for row in rows:
+        try:
+            total += int(row[4])
+        except Exception:
+            continue
+    return total
+
+
+def proxy_sections_kb() -> InlineKeyboardMarkup:
+    de_count = get_catalog_stock_units('proxy_de')
+    us_count = get_catalog_stock_units('proxy_us')
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton(f'🇩🇪 Германия | {de_count}', callback_data='cat:proxy_de'))
+    kb.add(InlineKeyboardButton(f'🇺🇸 США | {us_count}', callback_data='cat:proxy_us'))
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:catalog'))
+    return kb
+
+
+def main_menu_kb(user_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(InlineKeyboardButton('🛒 Каталог', callback_data='menu:catalog'))
+    kb.add(
+        InlineKeyboardButton('💰 Пополнить', callback_data='menu:topup'),
+        InlineKeyboardButton('📋 Правила', callback_data='menu:agreement'),
+    )
+    kb.add(InlineKeyboardButton('⭐ Отзывы', callback_data='menu:reviews'))
+    kb.add(
+        InlineKeyboardButton('📣 Канал', callback_data='menu:channel'),
+        InlineKeyboardButton('👤 Профиль', callback_data='menu:profile'),
+    )
+    if is_admin(user_id):
+        kb.add(InlineKeyboardButton('🛠 Админ панель', callback_data='menu:adminpanel'))
+    if WEB_SHOP_URL.startswith('http'):
+        kb.add(InlineKeyboardButton('🌐 Сайт', url=WEB_SHOP_URL))
+    return kb
+
+
+def back_to_main_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup().add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+
+
+def profile_kb() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton('🏠 Центр профиля', callback_data='profile:hub'))
+    kb.add(InlineKeyboardButton('🛒 Мои покупки', callback_data='profile:orders'))
+    kb.add(InlineKeyboardButton('💳 Мои пополнения', callback_data='profile:topups'))
+    kb.add(InlineKeyboardButton('🎫 Активировать промокод', callback_data='profile:promo'))
+    kb.add(InlineKeyboardButton('🆘 Техподдержка', callback_data='profile:support'))
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    return kb
+
+# --- Вынесено на верхний уровень ---
+def build_support_text() -> str:
+    return (
+        '🆘 <b>Техподдержка</b>\n'
+        'Пишите по любым вопросам:\n'
+        '@your_support_user\n'
+        '@Puladu1\n\n'
+        '⬅️ <b>Нажмите "Назад" для возврата</b>'
+    )
+
+@router.callback_query(lambda c: c.data == 'profile:support')
+async def profile_support_router(cb: types.CallbackQuery):
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='profile:hub'))
+    await safe_edit_text(cb.message, build_support_text(), reply_markup=kb)
+
+
+def build_profile_hub_text(user_id: int) -> str:
+    balance = get_balance(user_id)
+
+    rows = list_user_orders(user_id, limit=3)
+    if rows:
+        order_lines = []
+        for order_id, title, qty, total, status, _, _ in rows:
+            safe_title = html.escape((title or 'Товар').strip())
+            safe_status = html.escape(str(status or 'unknown'))
+            order_lines.append(f'#{order_id} {safe_title} ×{qty} • {total:.2f} ₽ • {safe_status}')
+    else:
+        order_lines = ['Покупок пока нет']
+
+    lines = [
+        f'ID: <code>{user_id}</code>',
+        f'Баланс: <b>{balance:.2f} ₽</b>',
+        f'Кешбэк: <b>{PURCHASE_CASHBACK_PERCENT:.2f}%</b>',
+        'Последние покупки:',
+        *order_lines,
+    ]
+
+    box_rows = ['╭──── 🪪 Личный кабинет']
+    for idx, line in enumerate(lines):
+        prefix = '╰' if idx == len(lines) - 1 else '├'
+        box_rows.append(f'{prefix} {line}')
+    return '\n'.join(box_rows)
+
+
+def catalog_kb() -> InlineKeyboardMarkup:
+    proxy_count = get_catalog_stock_units('proxy')
+    tg_count = get_catalog_stock_units('tg')
+    email_count = get_catalog_stock_units('email')
+
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(InlineKeyboardButton(f"{CATEGORY_NAMES['proxy']} | {proxy_count}", callback_data='cat:proxy'))
+    kb.add(InlineKeyboardButton(f"{CATEGORY_NAMES['tg']} | {tg_count}", callback_data='cat:tg'))
+    kb.add(InlineKeyboardButton(f"{CATEGORY_NAMES['email']} | {email_count}", callback_data='cat:email'))
+    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    return kb
+
+
+def category_products_kb(category: str, page: int = 0) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=1)
+    products = get_catalog_products(category)
+    total = len(products)
+    start = page * PRODUCTS_PAGE_SIZE
+    end = start + PRODUCTS_PAGE_SIZE
+    page_items = products[start:end]
+
+    for product_id, title, _, price, stock, _ in page_items:
+        price_text = f'{float(price):.2f}'.rstrip('0').rstrip('.')
+        kb.add(
+            InlineKeyboardButton(
+                f'{title} — {price_text} ₽ — {stock} шт.',
+                callback_data=f'buy:{product_id}:{page}:{category}',
+            )
+        )
+
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton('<< Предыдущая', callback_data=f'catpage:{category}:{page - 1}'))
+    if end < total:
+        nav_buttons.append(InlineKeyboardButton('Следующая >>', callback_data=f'catpage:{category}:{page + 1}'))
+    if nav_buttons:
+        kb.row(*nav_buttons)
+
+    kb.add(InlineKeyboardButton('↩️ Назад', callback_data='menu:catalog'))
+    return kb
+
+
+def category_products_text(category: str, page: int = 0) -> str:
+    products = get_catalog_products(category)
+    total = len(products)
+    start = page * PRODUCTS_PAGE_SIZE
+    end = min(start + PRODUCTS_PAGE_SIZE, total)
+    category_title = CATALOG_VIEW_NAMES.get(category, CATEGORY_NAMES.get(category, category))
+    page_label = f'{start + 1}-{end}' if total > 0 else '0-0'
+    return (
+        '╭──── 🛒 <b>Каталог товаров</b>\n'
+        f'├ Категория: <b>{category_title}</b>\n'
+        '├ Позиция: не выбрана\n'
+        f'╰ Доступные варианты: <b>{page_label}</b> из <b>{total}</b>'
+    )
+
+
+def quantity_kb(product_id: int, category: str, max_qty: int, page: int = 0) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=4)
+    safe_max = min(max_qty, 10) if max_qty > 0 else 1
+    for qty in range(1, safe_max + 1):
+        kb.insert(InlineKeyboardButton(str(qty), callback_data=f'qty:{product_id}:{qty}'))
+    kb.add(InlineKeyboardButton('✍️ Свое количество', callback_data=f'qtycustom:{product_id}:{page}:{category}'))
+    kb.add(InlineKeyboardButton('↩️ Назад', callback_data=f'buy:{product_id}:{page}:{category}'))
+    return kb
+
 
 def product_card_text(title: str, category: str, price: float, stock: int, description: str) -> str:
     category_title = CATEGORY_NAMES.get(category, category)
@@ -594,7 +881,7 @@ async def notify_admins_about_purchase(
             await bot.send_message(admin_id, text, reply_markup=kb)
         except Exception:
             pass
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('admin:issue_code:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('admin:issue_code:'))
 async def admin_issue_code_router(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.id):
         await cb.answer('Только для админов', show_alert=True)
@@ -614,7 +901,7 @@ async def admin_issue_code_router(cb: types.CallbackQuery):
     await cb.answer('Ожидаю код для выдачи')
 
 # Обработчик ввода кода админом после нажатия кнопки
-@dp.message_handler(lambda m: is_admin(m.from_user.id) and admin_action_state.get(m.from_user.id, {}).get('action') == 'issue_code' and admin_action_state.get(m.from_user.id, {}).get('step') == 'wait_code')
+@router.message(lambda m: is_admin(m.from_user.id) and admin_action_state.get(m.from_user.id, {}).get('action') == 'issue_code' and admin_action_state.get(m.from_user.id, {}).get('step') == 'wait_code')
 async def admin_receive_code_for_order(message: types.Message):
     state = admin_action_state.get(message.from_user.id)
     if not state:
@@ -1085,7 +1372,7 @@ async def cmd_start(message: types.Message):
     await show_main_menu(message.from_user.id, 'Добро пожаловать в магазин цифровых товаров!')
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('menu:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('menu:'))
 async def menu_router(cb: types.CallbackQuery):
     pending_custom_qty_input.pop(cb.from_user.id, None)
     action = cb.data.split(':', 1)[1]
@@ -1135,7 +1422,7 @@ async def menu_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('review:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('review:'))
 async def review_router(cb: types.CallbackQuery):
     parts = cb.data.split(':')
     if len(parts) < 3:
@@ -1197,7 +1484,7 @@ async def review_router(cb: types.CallbackQuery):
     await cb.answer('Жду ваш отзыв')
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('reviews:page:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('reviews:page:'))
 async def reviews_page_router(cb: types.CallbackQuery):
     try:
         page = int(cb.data.split(':')[2])
@@ -1210,7 +1497,7 @@ async def reviews_page_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('profile:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('profile:'))
 async def profile_router(cb: types.CallbackQuery):
     action = cb.data.split(':', 1)[1]
 
@@ -1269,7 +1556,7 @@ async def profile_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('cat:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('cat:'))
 async def category_router(cb: types.CallbackQuery):
     category = cb.data.split(':', 1)[1]
     if category == 'proxy':
@@ -1300,7 +1587,7 @@ async def category_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('catpage:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('catpage:'))
 async def category_page_router(cb: types.CallbackQuery):
     _, category, page_str = cb.data.split(':')
     page = int(page_str)
@@ -1324,7 +1611,7 @@ async def category_page_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('buy:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('buy:'))
 async def buy_router(cb: types.CallbackQuery):
     pending_custom_qty_input.pop(cb.from_user.id, None)
     parts = cb.data.split(':')
@@ -1350,7 +1637,7 @@ async def buy_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('qtymenu:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('qtymenu:'))
 async def qty_menu_router(cb: types.CallbackQuery):
     pending_custom_qty_input.pop(cb.from_user.id, None)
     parts = cb.data.split(':')
@@ -1380,7 +1667,7 @@ async def qty_menu_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith('qty:'))
+@router.callback_query(lambda c: c.data and c.data.startswith('qty:'))
 async def qty_router(cb: types.CallbackQuery):
     _, product_id_str, qty_str = cb.data.split(':')
     product_id = int(product_id_str)
@@ -2940,3 +3227,22 @@ async def on_shutdown(_: Dispatcher):
     release_lock()
 
 
+if __name__ == '__main__':
+    acquire_lock()
+    
+    try:
+        executor.start_polling(
+            dp,
+            skip_updates=True,
+            on_startup=on_startup,
+            on_shutdown=on_shutdown,
+            timeout=30,
+            relax=0.5,
+            fast=False,
+        )
+    except (KeyboardInterrupt, SystemExit):
+        logging.info('Bot stopped by user')
+    except Exception as e:
+        logging.exception(f'Bot crashed: {e}')
+    finally:
+        release_lock()
