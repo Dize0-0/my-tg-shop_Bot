@@ -30,9 +30,7 @@ class FunPayRunner:
     def __init__(self, account): pass
     def listen(self, requests_delay): return []
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-API_TOKEN = os.getenv('TG_BOT_TOKEN')
-if not API_TOKEN or not API_TOKEN.strip():
-    raise RuntimeError('TG_BOT_TOKEN не задан! Установите переменную окружения TG_BOT_TOKEN с токеном Telegram-бота.')
+API_TOKEN = os.getenv('TG_BOT_TOKEN', 'YOUR_BOT_TOKEN')
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 admin_action_state = {}
