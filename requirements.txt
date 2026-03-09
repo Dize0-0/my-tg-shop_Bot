@@ -1,1 +1,2 @@
-# ...existing code from your local requirements.txt...
+aiogram==2.25.1
+requests>=2.31.0
