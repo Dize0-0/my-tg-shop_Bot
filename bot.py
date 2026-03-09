@@ -679,13 +679,16 @@ def quantity_kb(product_id: int, category: str, max_qty: int, page: int = 0) -> 
 
 def product_card_text(title: str, category: str, price: float, stock: int, description: str) -> str:
     category_title = CATEGORY_NAMES.get(category, category)
-    return (
+    text = (
         '╭──── 🛒 <b>Карточка товара</b>\n'
         f'├ Категория: <b>{category_title}</b>\n'
         f'├ Позиция: <b>{title}</b>\n'
         f'├ Стоимость: <b>{price:.2f} ₽</b>\n'
         f'╰ В наличии: <b>{stock} шт.</b>'
     )
+    if description and description.strip():
+        text += f"\n\n<b>Описание:</b> {description.strip()}"
+    return text
 
 
 def split_credentials_items(credentials: str) -> list[str]:
@@ -834,11 +837,53 @@ async def notify_admins_about_purchase(
         f'Статус: {status_label}'
     )
 
+    # Кнопка "Выдать код по заказу"
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton(f'Выдать код по заказу #{order_id}', callback_data=f'admin_sendcode:{order_id}'))
+
     for admin_id in ADMIN_IDS:
         try:
-            await bot.send_message(admin_id, text)
+            await bot.send_message(admin_id, text, reply_markup=kb)
         except Exception:
             pass
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('admin:issue_code:'))
+async def admin_issue_code_router(cb: types.CallbackQuery):
+    if not is_admin(cb.from_user.id):
+        await cb.answer('Только для админов', show_alert=True)
+        return
+    try:
+        order_id = int(cb.data.split(':')[2])
+    except Exception:
+        await cb.answer('Некорректный ID заказа', show_alert=True)
+        return
+    order = get_order(order_id)
+    if not order:
+        await cb.answer('Заказ не найден', show_alert=True)
+        return
+    # Сохраняем состояние для ожидания кода
+    admin_action_state[cb.from_user.id] = {'action': 'issue_code', 'step': 'wait_code', 'order_id': str(order_id)}
+    await bot.send_message(cb.from_user.id, f'Пожалуйста, введите код для выдачи по заказу #{order_id}:')
+    await cb.answer('Ожидаю код для выдачи')
+
+# Обработчик ввода кода админом после нажатия кнопки
+@dp.message_handler(lambda m: is_admin(m.from_user.id) and admin_action_state.get(m.from_user.id, {}).get('action') == 'issue_code' and admin_action_state.get(m.from_user.id, {}).get('step') == 'wait_code')
+async def admin_receive_code_for_order(message: types.Message):
+    state = admin_action_state.get(message.from_user.id)
+    if not state:
+        return
+    order_id = int(state.get('order_id'))
+    code = message.text.strip()
+    order = get_order(order_id)
+    if not order:
+        await message.reply('Заказ не найден.')
+        admin_action_state.pop(message.from_user.id, None)
+        return
+    user_id = order[1]
+    set_order_code(order_id, code)
+    await bot.send_message(user_id, f'🔑 Вам выдан код по вашему заказу #{order_id}:\n<code>{html.escape(code)}</code>')
+    await message.reply(f'Код успешно выдан пользователю (ID {user_id}) по заказу #{order_id}.')
+    admin_action_state.pop(message.from_user.id, None)
 
 
 def admin_panel_kb() -> InlineKeyboardMarkup:
