@@ -1,5 +1,4 @@
-﻿
-# Функция для массовой рассылки всем пользователям
+﻿# Функция для массовой рассылки всем пользователям
 async def broadcast_message_to_all_users(message: str):
     from db import _connect
     conn = _connect()
@@ -15,8 +14,6 @@ async def broadcast_message_to_all_users(message: str):
         except Exception as e:
             logging.warning(f"Не удалось отправить сообщение {user_id}: {e}")
     return sent
-from aiogram import Router
-
 import asyncio
 import atexit
 import base64
@@ -36,9 +33,9 @@ from urllib.request import Request, urlopen
 from typing import Any, Dict, Optional, Set
 
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.enums import ParseMode
-# executor не нужен в aiogram 3.x
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+from aiogram.utils.exceptions import MessageNotModified
+from aiogram.utils import executor
 
 from db import (
     activate_promo,
@@ -93,14 +90,8 @@ logging.basicConfig(level=logging.INFO)
 BASE_DIR_PATH = Path(__file__).resolve().parent
 BASE_DIR = str(BASE_DIR_PATH)
 
-
 # Bot instance lock file to prevent multiple simultaneous runs
 LOCK_FILE = BASE_DIR_PATH / 'bot.lock'
-
-
-
-
-
 
 
 def acquire_lock():
@@ -295,19 +286,11 @@ PRODUCTS_PAGE_SIZE = 5
 REVIEW_REWARD_RUB = 1.0
 REVIEWS_PAGE_SIZE = 3
 
-from aiogram.client.default import DefaultBotProperties
-bot = Bot(
-    token=API_TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-)
-dp = Dispatcher()
+bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher(bot)
 
 init_db()
 seed_products()
-
-# --- Router для aiogram 3.x ---
-router = Router()
-dp.include_router(router)
 
 pending_promo_input: Set[int] = set()
 pending_custom_topup: Set[int] = set()
@@ -595,25 +578,8 @@ def profile_kb() -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton('🛒 Мои покупки', callback_data='profile:orders'))
     kb.add(InlineKeyboardButton('💳 Мои пополнения', callback_data='profile:topups'))
     kb.add(InlineKeyboardButton('🎫 Активировать промокод', callback_data='profile:promo'))
-    kb.add(InlineKeyboardButton('🆘 Техподдержка', callback_data='profile:support'))
     kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
     return kb
-
-# --- Вынесено на верхний уровень ---
-def build_support_text() -> str:
-    return (
-        '🆘 <b>Техподдержка</b>\n'
-        'Пишите по любым вопросам:\n'
-        '@your_support_user\n'
-        '@Puladu1\n\n'
-        '⬅️ <b>Нажмите "Назад" для возврата</b>'
-    )
-
-@router.callback_query(lambda c: c.data == 'profile:support')
-async def profile_support_router(cb: types.CallbackQuery):
-    kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton('🔙 Назад', callback_data='profile:hub'))
-    await safe_edit_text(cb.message, build_support_text(), reply_markup=kb)
 
 
 def build_profile_hub_text(user_id: int) -> str:
@@ -881,7 +847,7 @@ async def notify_admins_about_purchase(
             await bot.send_message(admin_id, text, reply_markup=kb)
         except Exception:
             pass
-@router.callback_query(lambda c: c.data and c.data.startswith('admin:issue_code:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('admin:issue_code:'))
 async def admin_issue_code_router(cb: types.CallbackQuery):
     if not is_admin(cb.from_user.id):
         await cb.answer('Только для админов', show_alert=True)
@@ -901,7 +867,7 @@ async def admin_issue_code_router(cb: types.CallbackQuery):
     await cb.answer('Ожидаю код для выдачи')
 
 # Обработчик ввода кода админом после нажатия кнопки
-@router.message(lambda m: is_admin(m.from_user.id) and admin_action_state.get(m.from_user.id, {}).get('action') == 'issue_code' and admin_action_state.get(m.from_user.id, {}).get('step') == 'wait_code')
+@dp.message_handler(lambda m: is_admin(m.from_user.id) and admin_action_state.get(m.from_user.id, {}).get('action') == 'issue_code' and admin_action_state.get(m.from_user.id, {}).get('step') == 'wait_code')
 async def admin_receive_code_for_order(message: types.Message):
     state = admin_action_state.get(message.from_user.id)
     if not state:
@@ -1156,9 +1122,13 @@ async def show_main_menu(user_id: int, text: str = 'Главное меню:') -
 async def safe_edit_text(message: types.Message, text: str, reply_markup: Optional[InlineKeyboardMarkup] = None) -> None:
     try:
         await message.edit_text(text, reply_markup=reply_markup)
+    except MessageNotModified:
+        return
     except Exception:
         try:
             await message.edit_caption(caption=text, reply_markup=reply_markup)
+        except MessageNotModified:
+            return
         except Exception:
             try:
                 await bot.send_message(message.chat.id, text, reply_markup=reply_markup)
@@ -1372,7 +1342,7 @@ async def cmd_start(message: types.Message):
     await show_main_menu(message.from_user.id, 'Добро пожаловать в магазин цифровых товаров!')
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('menu:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('menu:'))
 async def menu_router(cb: types.CallbackQuery):
     pending_custom_qty_input.pop(cb.from_user.id, None)
     action = cb.data.split(':', 1)[1]
@@ -1422,7 +1392,7 @@ async def menu_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('review:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('review:'))
 async def review_router(cb: types.CallbackQuery):
     parts = cb.data.split(':')
     if len(parts) < 3:
@@ -1484,7 +1454,7 @@ async def review_router(cb: types.CallbackQuery):
     await cb.answer('Жду ваш отзыв')
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('reviews:page:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('reviews:page:'))
 async def reviews_page_router(cb: types.CallbackQuery):
     try:
         page = int(cb.data.split(':')[2])
@@ -1497,7 +1467,7 @@ async def reviews_page_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('profile:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('profile:'))
 async def profile_router(cb: types.CallbackQuery):
     action = cb.data.split(':', 1)[1]
 
@@ -1556,7 +1526,7 @@ async def profile_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('cat:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('cat:'))
 async def category_router(cb: types.CallbackQuery):
     category = cb.data.split(':', 1)[1]
     if category == 'proxy':
@@ -1587,7 +1557,7 @@ async def category_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('catpage:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('catpage:'))
 async def category_page_router(cb: types.CallbackQuery):
     _, category, page_str = cb.data.split(':')
     page = int(page_str)
@@ -1611,7 +1581,7 @@ async def category_page_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('buy:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('buy:'))
 async def buy_router(cb: types.CallbackQuery):
     pending_custom_qty_input.pop(cb.from_user.id, None)
     parts = cb.data.split(':')
@@ -1637,7 +1607,7 @@ async def buy_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('qtymenu:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('qtymenu:'))
 async def qty_menu_router(cb: types.CallbackQuery):
     pending_custom_qty_input.pop(cb.from_user.id, None)
     parts = cb.data.split(':')
@@ -1667,7 +1637,7 @@ async def qty_menu_router(cb: types.CallbackQuery):
     await cb.answer()
 
 
-@router.callback_query(lambda c: c.data and c.data.startswith('qty:'))
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('qty:'))
 async def qty_router(cb: types.CallbackQuery):
     _, product_id_str, qty_str = cb.data.split(':')
     product_id = int(product_id_str)
@@ -1792,7 +1762,7 @@ async def qty_router(cb: types.CallbackQuery):
             f'{cashback_text}'
             f'├ Баланс: <b>{balance:.2f} ₽</b>\n'
             f'├ Данные:\n<code>{delivery_data}</code>\n'
-            '╰ Техподдержка находится в профиле'
+            '╰ Поддержка: @your_support_user'
         )
         await safe_edit_text(cb.message, deliver_text, reply_markup=review_offer_kb(order_id))
         await cb.answer('Покупка успешна')
