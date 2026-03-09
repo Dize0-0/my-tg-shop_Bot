@@ -840,7 +840,7 @@ async def notify_admins_about_purchase(
     # Кнопка "Выдать код по заказу"
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton(f'Выдать код по заказу #{order_id}', callback_data=f'admin_sendcode:{order_id}'))
+    kb.add(InlineKeyboardButton(f'Выдать код по заказу #{order_id}', callback_data=f'admin:issue_code:{order_id}'))
 
     for admin_id in ADMIN_IDS:
         try:
