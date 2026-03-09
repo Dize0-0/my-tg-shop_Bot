@@ -1,5 +1,4 @@
-﻿from aiogram.filters import Command, Text
-
+﻿
 # Функция для массовой рассылки всем пользователям
 async def broadcast_message_to_all_users(message: str):
     from db import _connect
@@ -1368,7 +1367,7 @@ async def github_backup_worker() -> None:
         await asyncio.sleep(GITHUB_BACKUP_INTERVAL_SECONDS)
 
 
-@router.message(Command('start'))
+@dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
     await show_main_menu(message.from_user.id, 'Добро пожаловать в магазин цифровых товаров!')
 
@@ -2260,7 +2259,7 @@ async def admin_add_save_router(cb: types.CallbackQuery):
     await cb.answer('Сохранено')
 
 
-@router.message(Text())
+@dp.message_handler(content_types=types.ContentType.TEXT)
 async def text_router(message: types.Message):
     user_id = message.from_user.id
     text = (message.text or '').strip()
@@ -2827,7 +2826,7 @@ async def text_router(message: types.Message):
         return
 
 
-@router.message(Command('admin'))
+@dp.message_handler(commands=['admin'])
 async def cmd_admin(message: types.Message):
     if not is_admin(message.from_user.id):
         return
@@ -2845,7 +2844,7 @@ async def cmd_admin(message: types.Message):
     )
 
 
-@router.message(Command('adminpanel'))
+@dp.message_handler(commands=['adminpanel'])
 async def cmd_adminpanel(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -2855,7 +2854,7 @@ async def cmd_adminpanel(message: types.Message):
     await message.reply(admin_panel_text(message.from_user.id), reply_markup=admin_panel_kb())
 
 
-@router.message(Command('addproduct'))
+@dp.message_handler(commands=['addproduct'])
 async def cmd_addproduct(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -2909,7 +2908,7 @@ async def cmd_addproduct(message: types.Message):
     await message.reply(f'Товар добавлен, id={product_id}')
 
 
-@router.message(Command('refill'))
+@dp.message_handler(commands=['refill'])
 async def cmd_refill(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -2932,7 +2931,7 @@ async def cmd_refill(message: types.Message):
     await message.reply('Остаток обновлен')
 
 
-@router.message(Command('setstock'))
+@dp.message_handler(commands=['setstock'])
 async def cmd_setstock(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -2955,7 +2954,7 @@ async def cmd_setstock(message: types.Message):
     await message.reply('Остаток установлен')
 
 
-@router.message(Command('confirmtopup'))
+@dp.message_handler(commands=['confirmtopup'])
 async def cmd_confirm_topup(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -2990,7 +2989,7 @@ async def cmd_confirm_topup(message: types.Message):
         pass
 
 
-@router.message(Command('createpromo'))
+@dp.message_handler(commands=['createpromo'])
 async def cmd_createpromo(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -3014,7 +3013,7 @@ async def cmd_createpromo(message: types.Message):
     await message.reply(f'Промокод {code} создан: {amount:.2f} ₽, активаций {uses}')
 
 
-@router.message(Command('sendcode'))
+@dp.message_handler(commands=['sendcode'])
 async def cmd_sendcode(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -3052,7 +3051,7 @@ async def cmd_sendcode(message: types.Message):
     )
 
 
-@router.message(Command('addbalance'))
+@dp.message_handler(commands=['addbalance'])
 async def cmd_addbalance(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
@@ -3076,7 +3075,7 @@ async def cmd_addbalance(message: types.Message):
     await message.reply(f'Баланс пользователя {user_id} изменен на {amount:.2f} ₽. Текущий: {bal:.2f} ₽')
 
 
-@router.message(Command('deletereview'))
+@dp.message_handler(commands=['deletereview'])
 async def cmd_deletereview(message: types.Message):
     if not is_admin(message.from_user.id):
         await message.reply('Только админ')
