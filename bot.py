@@ -613,9 +613,6 @@ def build_profile_hub_text(user_id: int) -> str:
         f'Кешбэк: <b>{PURCHASE_CASHBACK_PERCENT:.2f}%</b>',
         'Последние покупки:',
         *order_lines,
-        '',
-        'Техподдержка:',
-        '@your_support_user @Puladu1',
     ]
 
     box_rows = ['╭──── 🪪 Личный кабинет']
