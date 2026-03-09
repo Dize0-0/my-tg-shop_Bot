@@ -1653,10 +1653,23 @@ async def qty_router(cb: types.CallbackQuery):
             return
 
         if category == 'tg':
+            # Автоматическая выдача TG-аккаунта (номер из базы)
+            delivery_data, _ = consume_product_credentials(product_id, qty)
+            if not delivery_data:
+                change_balance(user_id, total)
+                await cb.answer('Товар закончился во время покупки, деньги возвращены', show_alert=True)
+                await safe_edit_text(
+                    cb.message,
+                    '⛔ Во время оформления товар закончился, сумма возвращена на баланс.\n'
+                    'Обновите каталог и попробуйте снова.',
+                    reply_markup=back_to_main_kb(),
+                )
+                return
+
             update_stock(product_id, -qty)
-            order_id = create_order(user_id, product_id, qty, total, 'waiting_phone')
-            pending_tg_phone_order[user_id] = order_id
-            await notify_admins_about_purchase(cb.from_user, order_id, title, qty, total, 'waiting_phone')
+            order_id = create_order(user_id, product_id, qty, total, 'delivered')
+            set_order_code(order_id, delivery_data)
+            await notify_admins_about_purchase(cb.from_user, order_id, title, qty, total, 'delivered')
             cashback = calculate_cashback(total)
             if cashback > 0:
                 change_balance(user_id, cashback)
@@ -1664,16 +1677,16 @@ async def qty_router(cb: types.CallbackQuery):
             cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
             await safe_edit_text(
                 cb.message,
-                '╭──── ✅ <b>Оплата принята</b>\n'
-                f'├ Заказ: <b>#{order_id}</b>\n'
-                '├ Отправьте номер для кода\n'
-                '├ Пример: <code>+420123456789</code>\n'
+                f'╭──── ✅ <b>Заказ #{order_id} оплачен</b>\n'
+                f'├ Товар: <b>{title}</b>\n'
+                f'├ Количество: {qty}\n'
+                f'├ Сумма: {total:.2f} ₽\n'
                 f'{cashback_text}'
                 f'├ Баланс: <b>{balance:.2f} ₽</b>\n'
-                '╰ Поддержка: @your_support_user',
-                reply_markup=back_to_main_kb(),
+                f'╰ Ваш номер для входа:\n<code>{delivery_data}</code>',
+                reply_markup=review_offer_kb(order_id),
             )
-            await cb.answer('Ожидаю номер')
+            await cb.answer('TG-аккаунт выдан')
             return
 
         delivery_data, _ = consume_product_credentials(product_id, qty)
