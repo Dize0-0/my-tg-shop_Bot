@@ -1,0 +1,286 @@
+/* HATE_MODS Admin Panel Styles */
+:root {
+  --bg-main: #111;
+  --bg-header: #181818;
+  --bg-sidebar: #181818;
+  --bg-card: #181818;
+  --text-main: #fff;
+  --text-muted: #bbb;
+  --accent-red: #e53935;
+  --accent-white: #fff;
+  --border-red: #e53935;
+  --border-white: #fff;
+  --radius: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.18);
+  --transition: 0.18s cubic-bezier(.4,0,.2,1);
+  --sidebar-width: 80px;
+  --header-height: 64px;
+  --footer-height: 60px;
+  --font-main: 'Inter', 'Roboto', Arial, sans-serif;
+}
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  box-sizing: border-box;
+}
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.header {
+  width: 100vw;
+  height: var(--header-height);
+  background: var(--bg-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 36px;
+  box-shadow: 0 2px 12px #00000022;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent-white);
+  user-select: none;
+}
+.main-nav {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.main-nav .nav-link {
+  color: var(--accent-white);
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1.05em;
+  padding: 6px 0;
+  border-bottom: 2px solid transparent;
+  transition: border var(--transition), color var(--transition);
+}
+.main-nav .nav-link.active,
+.main-nav .nav-link:hover {
+  color: var(--accent-red);
+  border-bottom: 2px solid var(--accent-red);
+}
+.header-actions {
+  display: flex;
+  gap: 16px;
+}
+.header-actions button {
+  background: none;
+  border: none;
+  color: var(--accent-white);
+  font-weight: 600;
+  font-size: 1em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  transition: background var(--transition), color var(--transition);
+}
+.header-actions button:hover {
+  background: var(--accent-red);
+  color: #fff;
+}
+.header-actions img {
+  height: 20px;
+  width: 20px;
+}
+.sidebar {
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  width: var(--sidebar-width);
+  height: calc(100vh - var(--header-height) - var(--footer-height));
+  background: var(--bg-sidebar);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 0;
+  z-index: 9;
+}
+.sidebar-btn {
+  background: none;
+  border: none;
+  color: var(--accent-white);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.95em;
+  padding: 12px 0 6px 0;
+  width: 100%;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border var(--transition), color var(--transition);
+  border: 2px solid transparent;
+}
+.sidebar-btn.active,
+.sidebar-btn:hover {
+  border: 2px solid var(--border-red);
+  color: var(--accent-red);
+}
+.sidebar-btn img {
+  width: 28px;
+  height: 28px;
+  filter: brightness(1.2);
+}
+.main-content {
+  margin-left: var(--sidebar-width);
+  margin-top: var(--header-height);
+  min-height: calc(100vh - var(--header-height) - var(--footer-height));
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  background: var(--bg-main);
+}
+.center-block {
+  width: 100%;
+  max-width: 700px;
+  margin: 60px auto 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeIn 0.8s;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: none; }
+}
+.main-title {
+  font-size: 3.2rem;
+  font-weight: 900;
+  color: var(--accent-white);
+  letter-spacing: 0.2em;
+  text-shadow: 0 4px 32px #e5393555, 0 2px 8px #000a;
+  margin-bottom: 8px;
+  margin-top: 0;
+  text-align: center;
+}
+.subtitle {
+  color: var(--accent-red);
+  font-size: 1.2em;
+  font-weight: 600;
+  margin-bottom: 32px;
+  text-align: center;
+}
+.stats-cards {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border-red);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 140px;
+  animation: fadeIn 1.2s;
+}
+.stat-label {
+  color: var(--text-muted);
+  font-size: 1em;
+  margin-bottom: 6px;
+}
+.stat-value {
+  color: var(--accent-white);
+  font-size: 2.1em;
+  font-weight: 700;
+}
+.main-actions {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+.btn {
+  font-size: 1.1em;
+  font-weight: 700;
+  border-radius: var(--radius);
+  padding: 14px 32px;
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border var(--transition);
+  box-shadow: var(--shadow);
+}
+.btn-red {
+  background: var(--accent-red);
+  color: #fff;
+  border: 2px solid var(--accent-red);
+}
+.btn-red:hover {
+  background: #fff;
+  color: var(--accent-red);
+}
+.btn-white {
+  background: #fff;
+  color: var(--accent-red);
+  border: 2px solid var(--accent-red);
+}
+.btn-white:hover {
+  background: var(--accent-red);
+  color: #fff;
+}
+.footer {
+  width: 100vw;
+  height: var(--footer-height);
+  background: var(--bg-header);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 36px;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -2px 12px #00000022;
+}
+.footer-left {
+  color: var(--text-muted);
+  font-size: 1em;
+}
+.footer-socials {
+  display: flex;
+  gap: 18px;
+}
+.footer-socials a img {
+  width: 28px;
+  height: 28px;
+  filter: brightness(1.2);
+  transition: filter var(--transition);
+}
+.footer-socials a:hover img {
+  filter: brightness(1.2) drop-shadow(0 0 6px var(--accent-red)) sepia(1) hue-rotate(-30deg) saturate(8);
+}
+.footer-hatelink {
+  margin-left: 24px;
+}
+@media (max-width: 1400px) {
+  .center-block { max-width: 95vw; }
+  .stats-cards { flex-direction: column; gap: 12px; }
+  .main-actions { flex-direction: column; gap: 12px; }
+}
+@media (max-width: 900px) {
+  .header, .footer { padding: 0 8px; }
+  .main-content { margin-left: 0; }
+  .sidebar { display: none; }
+}

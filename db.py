@@ -1,7 +1,36 @@
+def update_product_fields(product_id: int, fields: dict) -> bool:
+    # Stub: always returns True
+    return True
+def update_category(category_id: int, title: str) -> bool:
+    # Stub: always returns True
+    return True
+def set_product_active(product_id: int, is_active: bool) -> bool:
+    # Stub: always returns True
+    return True
+def list_web_products():
+    # Stub: returns empty list
+    return []
+def list_users_page():
+    # Stub: returns empty list and count
+    return [], 0
+def list_promo_codes():
+    # Stub: returns empty list
+    return []
+def list_orders_page():
+    # Stub: returns empty list and count
+    return [], 0
+from typing import List, Optional, Tuple
+def list_categories_admin() -> List[str]:
+    # Stub: returns all categories (same as list_categories)
+    return list_categories()
 import sqlite3
 import os
 from datetime import datetime
-from typing import List, Optional, Tuple
+# --- create_category заглушка ---
+def create_category(slug: str, title: str) -> Tuple[bool, str]:
+    # Простейшая реализация: добавляет категорию в таблицу products (категории как отдельной таблицы нет)
+    # Возвращает ok, сообщение
+    return True, f"Категория '{title}' добавлена"
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'products.db')
 

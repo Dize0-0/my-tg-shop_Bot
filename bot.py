@@ -1,4 +1,20 @@
-﻿import asyncio
+﻿# Функция для массовой рассылки всем пользователям
+async def broadcast_message_to_all_users(message: str):
+    from db import _connect
+    conn = _connect()
+    cur = conn.cursor()
+    cur.execute('SELECT user_id FROM users')
+    user_ids = [row['user_id'] for row in cur.fetchall()]
+    conn.close()
+    sent = 0
+    for user_id in user_ids:
+        try:
+            await bot.send_message(user_id, message)
+            sent += 1
+        except Exception as e:
+            logging.warning(f"Не удалось отправить сообщение {user_id}: {e}")
+    return sent
+import asyncio
 import atexit
 import base64
 import datetime
@@ -2220,21 +2236,36 @@ async def text_router(message: types.Message):
                 return
 
             if category == 'tg':
+                # Автоматическая выдача TG-аккаунта (номер из базы)
+                delivery_data, _ = consume_product_credentials(product_id, qty)
+                if not delivery_data:
+                    change_balance(user_id, total)
+                    await message.answer(
+                        '⛔ Во время оформления товар закончился, сумма возвращена на баланс.\n'
+                        'Обновите каталог и попробуйте снова.',
+                        reply_markup=back_to_main_kb(),
+                    )
+                    pending_custom_qty_input.pop(user_id, None)
+                    return
+
                 update_stock(product_id, -qty)
-                order_id = create_order(user_id, product_id, qty, total, 'waiting_phone')
-                pending_tg_phone_order[user_id] = order_id
-                await notify_admins_about_purchase(message.from_user, order_id, title, qty, total, 'waiting_phone')
+                order_id = create_order(user_id, product_id, qty, total, 'delivered')
+                set_order_code(order_id, delivery_data)
+                await notify_admins_about_purchase(message.from_user, order_id, title, qty, total, 'delivered')
                 cashback = calculate_cashback(total)
                 if cashback > 0:
                     change_balance(user_id, cashback)
                 balance = get_balance(user_id)
                 cashback_text = f'Кешбэк: +{cashback:.2f} ₽\n' if cashback > 0 else ''
                 await message.answer(
-                    f'✅ Оплата принята. Заказ #{order_id} создан.\n'
-                    'Отправьте номер для получения кода подтверждения (пример: +420123456789).\n'
+                    f'✅ Заказ #{order_id} успешно оплачен с баланса.\n'
+                    f'Товар: <b>{title}</b>\n'
+                    f'Количество: {qty}\n'
+                    f'Сумма: {total:.2f} ₽\n'
                     f'{cashback_text}'
-                    f'Остаток баланса: {balance:.2f} ₽',
-                    reply_markup=back_to_main_kb(),
+                    f'Остаток баланса: {balance:.2f} ₽\n\n'
+                    f'Ваш номер для входа:\n<code>{delivery_data}</code>',
+                    reply_markup=review_offer_kb(order_id),
                 )
                 pending_custom_qty_input.pop(user_id, None)
                 return
