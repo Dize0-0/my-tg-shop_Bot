@@ -578,7 +578,19 @@ def profile_kb() -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton('🛒 Мои покупки', callback_data='profile:orders'))
     kb.add(InlineKeyboardButton('💳 Мои пополнения', callback_data='profile:topups'))
     kb.add(InlineKeyboardButton('🎫 Активировать промокод', callback_data='profile:promo'))
+    kb.add(InlineKeyboardButton('🆘 Техподдержка', callback_data='profile:support'))
     kb.add(InlineKeyboardButton('🔙 Назад', callback_data='menu:main'))
+    def build_support_text() -> str:
+        return (
+            '🆘 <b>Техподдержка</b>\n'
+            'Пишите по любым вопросам:\n'
+            '@your_support_user\n'
+            '@Puladu1'
+        )
+
+    @dp.callback_query_handler(lambda c: c.data == 'profile:support')
+    async def profile_support_router(cb: types.CallbackQuery):
+        await safe_edit_text(cb.message, build_support_text(), reply_markup=profile_kb())
     return kb
 
 
@@ -601,6 +613,9 @@ def build_profile_hub_text(user_id: int) -> str:
         f'Кешбэк: <b>{PURCHASE_CASHBACK_PERCENT:.2f}%</b>',
         'Последние покупки:',
         *order_lines,
+        '',
+        'Техподдержка:',
+        '@your_support_user @Puladu1',
     ]
 
     box_rows = ['╭──── 🪪 Личный кабинет']
@@ -1762,7 +1777,7 @@ async def qty_router(cb: types.CallbackQuery):
             f'{cashback_text}'
             f'├ Баланс: <b>{balance:.2f} ₽</b>\n'
             f'├ Данные:\n<code>{delivery_data}</code>\n'
-            '╰ Поддержка: @your_support_user'
+            '╰ Техподдержка находится в профиле'
         )
         await safe_edit_text(cb.message, deliver_text, reply_markup=review_offer_kb(order_id))
         await cb.answer('Покупка успешна')
