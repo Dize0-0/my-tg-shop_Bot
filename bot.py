@@ -458,7 +458,21 @@ def build_main_menu_text(user_id: int, intro_text: str = '') -> str:
         except Exception:
             continue
 
-    # Новый блок: показываем только почты с их названиями и количеством
+    # Формируем блоки для TG, прокси и почт
+    tg_lines = []
+    for row in tg_items:
+        title = str(row[1])
+        stock = int(row[4]) if row[4] is not None else 0
+        if stock > 0:
+            tg_lines.append(f'{title} | <b>{stock}</b>')
+
+    proxy_lines = []
+    for row in proxy_items:
+        title = str(row[1])
+        stock = int(row[4]) if row[4] is not None else 0
+        if stock > 0:
+            proxy_lines.append(f'{title} | <b>{stock}</b>')
+
     email_lines = []
     for row in email_items:
         title = str(row[1])
@@ -466,12 +480,28 @@ def build_main_menu_text(user_id: int, intro_text: str = '') -> str:
         if stock > 0:
             email_lines.append(f'{title} | <b>{stock}</b>')
 
+    sections = []
+    if tg_lines:
+        box_rows = ['╭──── TG аккаунты']
+        for idx, line in enumerate(tg_lines):
+            prefix = '╰' if idx == len(tg_lines) - 1 else '├'
+            box_rows.append(f'{prefix} ⬅️ {line}')
+        sections.append('\n'.join(box_rows))
+    if proxy_lines:
+        box_rows = ['╭──── Прокси']
+        for idx, line in enumerate(proxy_lines):
+            prefix = '╰' if idx == len(proxy_lines) - 1 else '├'
+            box_rows.append(f'{prefix} ⬅️ {line}')
+        sections.append('\n'.join(box_rows))
     if email_lines:
         box_rows = ['╭──── Почты в наличии']
         for idx, line in enumerate(email_lines):
             prefix = '╰' if idx == len(email_lines) - 1 else '├'
             box_rows.append(f'{prefix} ⬅️ {line}')
-        sections_text = '\n'.join(box_rows) + '\n\n'
+        sections.append('\n'.join(box_rows))
+
+    if sections:
+        sections_text = '\n\n'.join(sections) + '\n\n'
     else:
         sections_text = ''
 
