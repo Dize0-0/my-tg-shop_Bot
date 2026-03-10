@@ -458,20 +458,18 @@ def build_main_menu_text(user_id: int, intro_text: str = '') -> str:
         except Exception:
             continue
 
-    section_lines: list[str] = []
-    if proxy_de_stock > 0:
-        section_lines.append(f'Прокси Германия | <b>{proxy_de_stock}</b>')
-    if proxy_us_stock > 0:
-        section_lines.append(f'Прокси США | <b>{proxy_us_stock}</b>')
-    if tg_stock > 0:
-        section_lines.append(f'TG аккаунты | <b>{tg_stock}</b>')
-    if email_stock > 0:
-        section_lines.append(f'Почты | <b>{email_stock}</b>')
+    # Новый блок: показываем только почты с их названиями и количеством
+    email_lines = []
+    for row in email_items:
+        title = str(row[1])
+        stock = int(row[4]) if row[4] is not None else 0
+        if stock > 0:
+            email_lines.append(f'{title} | <b>{stock}</b>')
 
-    if section_lines:
-        box_rows = ['╭──── Доступно сейчас']
-        for idx, line in enumerate(section_lines):
-            prefix = '╰' if idx == len(section_lines) - 1 else '├'
+    if email_lines:
+        box_rows = ['╭──── Почты в наличии']
+        for idx, line in enumerate(email_lines):
+            prefix = '╰' if idx == len(email_lines) - 1 else '├'
             box_rows.append(f'{prefix} ⬅️ {line}')
         sections_text = '\n'.join(box_rows) + '\n\n'
     else:
