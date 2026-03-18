@@ -1,2 +1,4 @@
-aiogram==2.25.1
-requests>=2.31.0
+# requirements.txt
+# Добавьте сюда все зависимости вашего бота
+aiogram
+python-dotenv
