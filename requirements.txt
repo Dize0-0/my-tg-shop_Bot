@@ -2,3 +2,4 @@
 # Добавьте сюда все зависимости вашего бота
 aiogram
 python-dotenv
+requests
