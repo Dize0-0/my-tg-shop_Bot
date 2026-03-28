@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Магазин TG Аккаунтов</title>
+</head>
+<body>
+    <h1>Магазин Telegram аккаунтов</h1>
+    <ul>
+        {% for p in products %}
+        <li>
+            <a href="/product/{{p.id}}">{{p.name}}</a> — {{p.price}} руб.
+        </li>
+        {% endfor %}
+    </ul>
+    <a href="/admin">Админка</a>
+</body>
+</html>

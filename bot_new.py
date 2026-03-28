@@ -4,7 +4,19 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils import executor
 
-API_TOKEN = os.getenv('TG_BOT_TOKEN', 'YOUR_BOT_TOKEN')
+API_TOKEN = os.getenv('TG_BOT_TOKEN')
+if not API_TOKEN:
+    raise ValueError("Переменная окружения TG_BOT_TOKEN не установлена!")
+
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
+
+@dp.message_handler()
+async def echo(message: types.Message):
+    await message.answer("Привет! Я мини-бот.")
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
 LOLZ_TOKEN = os.getenv('LOLZ_TOKEN', 'YOUR_LOLZ_TOKEN')
 
 bot = Bot(token=API_TOKEN)
