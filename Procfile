@@ -1,1 +1,1 @@
-web: python3 shop/app.py
+web: python3 bot.py
